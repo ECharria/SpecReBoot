@@ -1,0 +1,4 @@
+# see https://flake8.pycqa.org/en/latest/user/configuration.html for more information
+[flake8]
+# set accepted line length to 88 characters to match black
+max-line-length = 88

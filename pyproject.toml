@@ -1,0 +1,15 @@
+[project]
+# basic information
+name = "your_project_name"
+description = "A description of your awesome Python project"
+authors = [
+  {name = "Your Name", email = "example@email.xyz"},
+]
+
+# This is the version of your project. You can increase the counter to indicate changes
+version = "0.1.0"
+
+# it is nice to pin down the version used to develop the project
+requires-python = ">=3.9"
+
+readme = "README.md"
