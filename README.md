@@ -8,7 +8,7 @@
 
 ## Overview
 
-**phylo2MS** brings the statistical rigor of **phylogenetic bootstrapping** to **mass spectrometry (MS/MS)**.  
+**Phylo2MS** brings the statistical rigor of **phylogenetic bootstrapping** to **mass spectrometry (MS/MS)**.  
 Inspired by *Felsenstein’s algorithm* in phylogenetics, phylo2MS resamples fragment peaks, neutral losses, or learned spectral features to generate *pseudo-replicate spectra*.  
 
 By recalculating similarity scores (currently cosine-based) across many replicates, phylo2MS estimates **bootstrap support** for every edge between spectra, quantifying how robust molecular relationships are across feature resampling.  
