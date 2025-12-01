@@ -25,7 +25,7 @@ The resulting **support matrices** and **consensus networks** help:
 
 - **Fragment peaks ≈ alignment sites** → resampled like columns in sequence bootstrapping  
 - **Edge support:** fraction of bootstraps where two spectra are mutual top-K neighbors  
-- **Consensus network/tree:** built from edges above a support threshold  
-- **Feature-level lens:** measures fragment/neutral losses importance
+- **Consensus network:** built from edges above a support threshold  
+- **Feature-level lens:** measures fragment importance
 
 ---
