@@ -3,7 +3,7 @@ from matchms import Spectrum
 from typing import List
 
 
-def compute_global_bins(spectra: List[Spectrum], decimals: int) -> List[float]:
+def global_bins(spectra: List[Spectrum], decimals: int) -> List[float]:
     """
     Compute global m/z bins across all spectra by rounding peak m/z values.
 
