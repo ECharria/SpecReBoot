@@ -1,5 +1,6 @@
 ### - Imports
 import sys, os
+import pickle
 
 project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
 sys.path.append(project_root)
@@ -50,11 +51,15 @@ df_mean_sim, df_edge_sup = calculate_boostrapping(
     k=5,
     similarity_metric=ms2deepscore_similarity, # this part caon be substitute for example ModifiedCosine(tolerance=0.02)
     n_jobs=50,
+    track_bins=True
 )
 
 df_mean_sim.to_csv("bootstrap_mean_similarity_Cos.csv")
 df_edge_sup.to_csv("bootstrap_edge_support_Cos.csv")
 
+with open("bootstrap_history_MSn_Coconut_MS2D_Inspect.pkl", "wb") as f:
+    pickle.dump(history, f)
+    
 # Networking
 build_base_graph(df_mean_sim, df_edge_sup) #base similarity
 build_thresh_graph(df_mean_sim, df_edge_sup, sim_threshold = 0.7, support_threshold = 0.5) #two thresholds
