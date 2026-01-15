@@ -13,11 +13,41 @@ def calculate_boostrapping(
     similarity_metric=None,
     n_jobs=8,
     seed=42,
+    return_history: bool = False,
+    track_bins: bool = False,
 ):
     """
     Compute bootstrapped spectral similarity and mutual-kNN edge support.
-    """
 
+    Parameters
+    ----------
+    spectra_binned : list[matchms.Spectrum]
+    global_bins : sequence of float
+    B : int
+        Number of bootstrap replicates.
+    k : int
+        Size of kNN neighbourhood (mutual kNN used for edge support).
+    similarity_metric : matchms similarity object
+    n_jobs : int
+    seed : int
+    return_history : bool, optional
+        If True, also return per-bootstrap consensus similarity and edge
+        support matrices.
+    track_bins : bool, optional
+        If True (and return_history is True), record sampled/missing m/z bins
+        per bootstrap replicate.
+
+    Returns
+    -------
+    df_mean_sim : pd.DataFrame
+    df_edge_sup : pd.DataFrame
+    history : dict, optional
+        Only if return_history=True. Keys:
+            - "mean_sim": list[np.ndarray]
+            - "edge_sup": list[np.ndarray]
+            - "sampled_bins": list[np.ndarray]   (if track_bins)
+            - "missing_bins": list[np.ndarray]   (if track_bins)
+    """
 
     rng = np.random.default_rng(seed)
 
@@ -29,15 +59,13 @@ def calculate_boostrapping(
     edge_support = Counter()
 
     # -------------------------------------------------------------------------
-    # Create output scan labels + internal unique IDs
+    # Output labels + internal unique IDs
     # -------------------------------------------------------------------------
-    scan_labels = []      # final labels (user sees these)
-    internal_ids = []     # unique per spectrum (used internally)
+    scan_labels = []
+    internal_ids = []
     id_to_index = dict()
 
     for idx, spec in enumerate(spectra_binned):
-
-        # ORIGINAL scan number (may be duplicated)
         scan_number = (
             spec.get("scans")
             or spec.metadata.get("scans")
@@ -46,23 +74,30 @@ def calculate_boostrapping(
         )
         scan_labels.append(str(scan_number))
 
-        # INTERNAL unique ID based on feature_id
         feature_id = spec.metadata.get("feature_id", f"feat_{idx}")
         internal_id = f"INTFID_{feature_id}_{idx}"
         internal_ids.append(internal_id)
-
         id_to_index[internal_id] = idx
+
+    # -------------------------------------------------------------------------
+    # Optional history containers
+    # -------------------------------------------------------------------------
+    hist_mean_sim = []
+    hist_edge_sup = []
+    hist_sampled_bins = []
+    hist_missing_bins = []
 
     # -------------------------------------------------------------------------
     # Bootstrap iterations
     # -------------------------------------------------------------------------
-    for _ in range(B):
+    for b in range(B):
 
         # ------------------------------
-        # 1. Sample bins
+        # 1. Sample bins (with replacement)
         # ------------------------------
         sampled_indices = rng.integers(0, P, size=P)
-        sampled_bins = set(global_bins[i] for i in sampled_indices)
+        sampled_bins = [global_bins[i] for i in sampled_indices]
+        sampled_bins_set = set(sampled_bins)
 
         # ------------------------------
         # 2. Build bootstrap spectra
@@ -73,11 +108,10 @@ def calculate_boostrapping(
             mz = spec.peaks.mz
             intens = spec.peaks.intensities
 
-            mask = np.isin(mz, list(sampled_bins))
+            mask = np.isin(mz, list(sampled_bins_set))
             mz_kept = mz[mask]
             int_kept = intens[mask]
 
-            # Insert internal ID into metadata for matching
             meta = {**spec.metadata, "internal_id": internal_id}
 
             spectra_boot.append(
@@ -102,12 +136,12 @@ def calculate_boostrapping(
             )
 
         for item in scores:
+            # matchms sometimes returns 3-tuple, sometimes ((ref,qry), score)
             if len(item) == 3:
                 ref_spec, qry_spec, sim_val = item
             else:
                 (ref_spec, qry_spec), sim_val = item
 
-            # Identify by INTERNAL ID (never by scan)
             i = id_to_index[ref_spec.metadata["internal_id"]]
             j = id_to_index[qry_spec.metadata["internal_id"]]
 
@@ -123,7 +157,7 @@ def calculate_boostrapping(
             pair_counts[key] += 1
 
         # ------------------------------
-        # 4. Mutual-kNN edges
+        # 4. Mutual-kNN edges for this bootstrap
         # ------------------------------
         for i in range(N):
             row_sorted = np.argsort(sim_matrix[i])[::-1]
@@ -139,8 +173,42 @@ def calculate_boostrapping(
                     key = tuple(sorted((internal_ids[i], internal_ids[j])))
                     edge_support[key] += 1
 
+        # ------------------------------
+        # 5. Optional: record history after this bootstrap
+        # ------------------------------
+        if return_history:
+            # consensus similarity so far
+            cur_mean = np.eye(N, dtype="float32")
+            for (id_i, id_j), total in pair_sim_sum.items():
+                idx_i = id_to_index[id_i]
+                idx_j = id_to_index[id_j]
+                cnt = pair_counts[(id_i, id_j)]
+                cur_mean[idx_i, idx_j] = total / cnt
+                cur_mean[idx_j, idx_i] = total / cnt
+
+            # edge support so far (fraction of completed bootstraps)
+            cur_edge = np.zeros((N, N), dtype="float32")
+            denom = float(b + 1)
+            for (id_i, id_j), cnt in edge_support.items():
+                idx_i = id_to_index[id_i]
+                idx_j = id_to_index[id_j]
+                cur_edge[idx_i, idx_j] = cnt / denom
+                cur_edge[idx_j, idx_i] = cnt / denom
+
+            hist_mean_sim.append(cur_mean)
+            hist_edge_sup.append(cur_edge)
+
+            if track_bins:
+                sampled_arr = np.unique(np.array(sampled_bins))
+                missing_arr = np.setdiff1d(np.array(global_bins), sampled_arr)
+                hist_sampled_bins.append(sampled_arr)
+                hist_missing_bins.append(missing_arr)
+
+        if (b + 1) % 5 == 0:
+            print(f"[bootstrap {b+1}/{B}] done")
+
     # -------------------------------------------------------------------------
-    # 5. Aggregation — map back to ORIGINAL scan labels
+    # 6. Aggregation — map back to ORIGINAL scan labels
     # -------------------------------------------------------------------------
     mean_sim = np.eye(N, dtype="float32")
 
@@ -163,4 +231,18 @@ def calculate_boostrapping(
 
     df_edge_sup = pd.DataFrame(edge_mat, index=scan_labels, columns=scan_labels)
 
-    return df_mean_sim, df_edge_sup
+    # -------------------------------------------------------------------------
+    # 7. Return with or without history (backwards compatible)
+    # -------------------------------------------------------------------------
+    if not return_history:
+        return df_mean_sim, df_edge_sup
+
+    history = {
+        "mean_sim": hist_mean_sim,
+        "edge_sup": hist_edge_sup,
+    }
+    if track_bins:
+        history["sampled_bins"] = hist_sampled_bins
+        history["missing_bins"] = hist_missing_bins
+
+    return df_mean_sim, df_edge_sup, history
