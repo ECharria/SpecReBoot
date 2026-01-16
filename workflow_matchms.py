@@ -13,7 +13,6 @@ import numpy as np
 
 from phylo2MS.phylo2ms.binning.binning import global_bins, bin_spectra
 from phylo2MS.phylo2ms.bootstrapping.bootstrapping import calculate_boostrapping
-from.phylo2ms.networking.gnps_style import load_gnps_graph_and_id_map, add_rescued_edges_to_gnps_graph
 from matchms.similarity import ModifiedCosine, CosineGreedy, FlashSimilarity
 
 from phylo2MS.phylo2ms.networking.networking import build_base_graph, build_thresh_graph, build_core_rescue_graph
