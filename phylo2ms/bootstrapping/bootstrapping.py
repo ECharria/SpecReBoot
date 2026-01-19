@@ -86,7 +86,6 @@ def calculate_boostrapping(
     hist_edge_sup = []
     hist_sampled_bins = []
     hist_missing_bins = []
-
     # -------------------------------------------------------------------------
     # Bootstrap iterations
     # -------------------------------------------------------------------------
@@ -96,21 +95,25 @@ def calculate_boostrapping(
         # 1. Sample bins (with replacement)
         # ------------------------------
         sampled_indices = rng.integers(0, P, size=P)
-        sampled_bins = [global_bins[i] for i in sampled_indices]
-        sampled_bins_set = set(sampled_bins)
+        sampled_bins_arr = np.asarray(global_bins)[sampled_indices]  # array, not set
+        sampled_bins_arr = np.unique(sampled_bins_arr)               # optional speedup
 
         # ------------------------------
         # 2. Build bootstrap spectra
         # ------------------------------
         spectra_boot = []
-        for internal_id, spec in zip(internal_ids, spectra_binned):
+        n_empty = 0
 
+        for internal_id, spec in zip(internal_ids, spectra_binned):
             mz = spec.peaks.mz
             intens = spec.peaks.intensities
 
-            mask = np.isin(mz, list(sampled_bins_set))
+            mask = np.isin(mz, sampled_bins_arr)  # set is fine
             mz_kept = mz[mask]
             int_kept = intens[mask]
+
+            if mz_kept.size == 0:
+                n_empty += 1
 
             meta = {**spec.metadata, "internal_id": internal_id}
 
@@ -121,6 +124,17 @@ def calculate_boostrapping(
                     metadata=meta,
                 )
             )
+
+        # ---- after building spectra_boot (ONCE per bootstrap) ----
+        if n_empty > 0:
+            for idx_s, s in enumerate(spectra_boot):
+                if len(s.peaks.intensities) == 0:
+                    spectra_boot[idx_s] = Spectrum(
+                        mz=np.array([global_bins[0]], dtype="float32"),
+                        intensities=np.array([0.0], dtype="float32"),
+                        metadata=s.metadata,
+                    )
+            print(f"[bootstrap {b+1}/{B}] empty spectra this replicate: {n_empty}", flush=True)
 
         # ------------------------------
         # 3. Compute similarity matrix
