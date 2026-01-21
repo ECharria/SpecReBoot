@@ -1,4 +1,4 @@
-# Phylo2MS  
+# SpecReBoot  
 *Statistical bootstrapping for spectral similarity and molecular networking*
 
 > **Status:** Early development 🚧
