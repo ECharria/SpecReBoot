@@ -1,15 +1,14 @@
-[project]
-# basic information
-name = "your_project_name"
-description = "A description of your awesome Python project"
-authors = [
-  {name = "Your Name", email = "example@email.xyz"},
-]
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
-# This is the version of your project. You can increase the counter to indicate changes
+[project]
+name = "specreboot"
 version = "0.1.0"
 
-# it is nice to pin down the version used to develop the project
-requires-python = ">=3.9"
+[project.scripts]
+specreboot = "specreboot.cli:cli"
 
-readme = "README.md"
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["specreboot*"]
