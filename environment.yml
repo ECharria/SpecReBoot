@@ -3,7 +3,7 @@ channels:
   - defaults
 dependencies:
   - python=3.12
-  - matchms
+  - matchms = 0.31.0
   - ipykernel
   - spec2vec
   - ms2deepscore
