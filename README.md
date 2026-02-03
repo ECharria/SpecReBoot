@@ -1,5 +1,5 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18466798.svg)](https://doi.org/10.5281/zenodo.18466798)
-
+[![Repro Pack DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18466976.svg)](https://doi.org/10.5281/zenodo.18466976)
 
 # SpecReBoot 🧬🔁  
 *Statistical bootstrapping for spectral similarity and molecular networking*
