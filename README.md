@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/https:/zenodo.org/records/18466798)](https://doi.org/10.5281/zenodo.18466798)
+
 # SpecReBoot 🧬🔁  
 *Statistical bootstrapping for spectral similarity and molecular networking*
 
