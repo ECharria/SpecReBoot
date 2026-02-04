@@ -6,4 +6,4 @@ dependencies:
   - matchms = 0.31.0
   - ipykernel
   - spec2vec
-  - ms2deepscore
+  - ms2deepscore = 2.6
