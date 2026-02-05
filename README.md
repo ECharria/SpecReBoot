@@ -161,4 +161,4 @@ Coming soon
 
 ### Contact
 Please open a GitHub Issue for bugs / feature requests.
-Maintainers: Rosina Torres-Ortega (rosina.torresortea@wur.nl) and Esteban Charria-Guiron (esteban.charriagiron@wur.nl)
+Maintainers: Rosina Torres-Ortega (rosina.torresortea@wur.nl) and Esteban Charria-Girón (esteban.charriagiron@wur.nl)
