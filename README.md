@@ -129,11 +129,11 @@ Runs:
 Example:
 ```shell
 specreboot matchms \
-  --mgf "/Users/rtlortega/.../RiPPs.mgf" \ #to configure
-  --ms2dp-model "/Users/rtlortega/.../ms2deepscore_model.pt" \
-  --spec2vec-model "/Users/rtlortega/.../Spec2Vec.model" \
-  --outdir "/Users/rtlortega/.../out_matchms" \
-  --prefix "RiPPs" \
+  --mgf "/.../input_spectra.mgf" \ #to configure
+  --ms2dp-model "/.../ms2deepscore_model.pt" \
+  --spec2vec-model "/.../Spec2Vec.model" \
+  --outdir "/.../output_matchms" \
+  --prefix "Reboot" \
   --B 30 --k 5 --n-jobs 4 \
   --sim-threshold 0.7 --sim-threshold-ms2dp 0.8
 ```
@@ -147,15 +147,36 @@ Use this mode when you already have a GNPS network (GraphML) and want to:
 Example:
 ```shell
 specreboot gnps \
-  --mgf "/Users/rtlortega/.../specs_ms.mgf" \
-  --gnps-graphml "/Users/rtlortega/.../network_singletons.graphml" \
-  --outdir "/Users/rtlortega/.../out_gnps" \
-  --prefix "pesticides" \
+  --mgf "/.../Spectra_MN.mgf" \
+  --gnps-graphml "/.../network_singletons.graphml" \
+  --outdir "/.../output_gnps" \
+  --prefix "Reboot" \
   --B 100 --k 5 --n-jobs 4 \
   --similarity modcos --tolerance 0.02 \
   --candidate-node-attrs "shared name" \
   --sim-core 0.7 --support-core 0.5 --sim-rescue-min 1e-5 --support-rescue 0.5
 ```
+### Quick start — Exploring spectral connections between RiPPs (Case study from the preprint)
+This repository includes a small demo MS/MS dataset of RiPPs so you can quickly test whether SpecReBoot runs correctly on your machine.
+
+From the **repo root**, run:
+
+```bash
+specreboot matchms \
+  --mgf "demo/matchms/input/Manually_collected_RiPPs_NPATLAS_GNPS.mgf" \
+  --ms2dp-model "/path/to/ms2deepscore_model.pt" \
+  --spec2vec-model "/path/to/spec2vec_model.model" \
+  --outdir "/path/to/results_folder" \
+  --prefix "RiPPs" \
+  --B 30 --k 5 --n-jobs 4 \
+  --sim-threshold 0.7 --sim-threshold-ms2dp 0.8
+```
+If the run completes successfully, results will include:
+1) .csv files with mean similarity and edge support matrices
+2) .pkl files storing bootstrap bin histories
+3) .graphml files corresponding to the inferred molecular networks
+
+These outputs reproduce the RiPP case study discussed in the preprint and can be used as a reference for adapting SpecReBoot to your own datasets!
 
 ## Attribution
 ### License
@@ -163,8 +184,10 @@ specreboot gnps \
 The code in this package is licensed under the MIT License.
 
 ### Citation
-Coming soon
+If you use SpecReBoot in your work, please cite:
+
+Charria Girón, E., Torres Ortega, L. R., Mergola Greef, J., Marin Felix, Y., Caicedo Ortega, N. H., Surup, F., Medema, M. H., & van der Hooft, J. J. J. (2026). Bootstrap resampling of mass spectral pairs with SpecReBoot reveals hidden molecular relationships. *bioRxiv*. doi: [https://doi.org/10.64898/2026.02.03.703446](https://www.biorxiv.org/content/10.64898/2026.02.03.703446v1)
 
 ### Contact
-Please open a GitHub Issue for bugs / feature requests.
+Please open a GitHub Issue for bugs/feature requests.
 Maintainers: Rosina Torres-Ortega (rosina.torresortea@wur.nl) and Esteban Charria-Girón (esteban.charriagiron@wur.nl)
