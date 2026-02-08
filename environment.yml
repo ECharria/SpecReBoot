@@ -1,6 +1,7 @@
 name: specreboot
 channels:
-  - defaults
+  - conda-forge
+  - bioconda
 dependencies:
   - python=3.12
   - matchms = 0.31.0
