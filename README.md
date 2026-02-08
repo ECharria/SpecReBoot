@@ -73,21 +73,27 @@ SpecReBoot can run multiple similarity methods so you can compare robustness acr
 If you don’t have conda yet, Miniconda is enough:  
 https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html
 
-### 2) Create the conda environment
-From the **SpecReBoot repo root**:
-
-```bash
-conda env create -f environment.yml
-conda activate specreboot
-```
-
-### 3) Install SpecReBoot 
+### 2) Clone the repository
 First clone our repository where you want it:
 
 ```shell
 git clone https://github.com/ECharria/SpecReBoot.git   
 ```
-Then from this repo root type in the bash terminal: 
+
+### 3) Create a new, clean conda environment (recommended)
+Go to the **SpecReBoot repo root**:
+
+```bash
+cd SpecReBoot
+```
+Now create the environment using the .yml file:
+```bash
+conda env create -f environment.yml
+conda activate specreboot
+```
+
+### 4) Install SpecReBoot 
+Then from the repo root type in the bash terminal: 
 
 ```shell
 pip install -e .   
