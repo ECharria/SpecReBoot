@@ -21,12 +21,55 @@ def build_parser(p: argparse.ArgumentParser):
 
     # preprocessing/binning/bootstrap
     p.add_argument("--cleaned-mgf", default=None)
-    p.add_argument("--decimals", type=int, default=2)
-    p.add_argument("--B", type=int, default=100)
-    p.add_argument("--k", type=int, default=5)
-    p.add_argument("--n-jobs", type=int, default=8)
-    p.add_argument("--label-mode", default="feature", choices=["feature", "scan", "internal"])
+    p.add_argument(
+        "--B",
+        type=int,
+        default=100,
+        help=(
+            "Number of bootstrap replicates. "
+            "Each replicate resamples peaks (within each spectrum) and recomputes similarities. "
+            "Higher B = more stable edge-support estimates but slower runtime. "
+            "Typical: 30 (quick), 100 (standard), 300+ (high confidence)."
+        ),
+    )
+    p.add_argument(
+        "--k",
+        type=int,
+        default=5,
+        help=(
+            "Top-k neighbors per node to keep when building candidate edges in each bootstrap replicate "
+            "(i.e., for each spectrum keep only its k most similar spectra). "
+            "Higher k increases network density and runtime; lower k is stricter/sparser. "
+            "Typical: 5–20 depending on dataset size."
+        ),
+    )
+    p.add_argument(
+        "--decimals",
+        type=int,
+        default=2,
+        help=(
+            "Number of decimals used for m/z binning (global bin grid). "
+            "Example: 2 -> 0.01 m/z bins. More decimals = finer bins (potentially sparser); "
+            "fewer decimals = coarser bins (more merging)."
+        ),
+    )
+    p.add_argument(
+        "--n-jobs",
+        type=int,
+        default=8,
+        help="Number of parallel worker processes/threads used during bootstrapping.",
+    )
 
+    p.add_argument(
+        "--label-mode",
+        default="feature",
+        choices=["feature", "scan", "internal"],
+        help=(
+            "How to label spectra for mapping to GNPS nodes. "
+            "'feature' uses the feature ID/name if present; 'scan' uses scan numbers; "
+            "'internal' uses the internal order/index. "
+        ),
+    )
     # similarity choice (keep simple but flexible)
     p.add_argument(
         "--similarity",
@@ -46,11 +89,53 @@ def build_parser(p: argparse.ArgumentParser):
     )
 
     # rescue thresholds (pass through)
-    p.add_argument("--sim-core", type=float, default=0.7)
-    p.add_argument("--support-core", type=float, default=0.5)
-    p.add_argument("--sim-rescue-min", type=float, default=1e-5)
-    p.add_argument("--support-rescue", type=float, default=0.5)
+    # rescue thresholds (core + rescued edges)
+    p.add_argument(
+        "--sim-core",
+        type=float,
+        default=0.7,
+        help=(
+            "Core-edge similarity threshold. An edge is labeled 'core' if:\n"
+            "  mean_similarity >= sim_core  AND  bootstrap_support >= support_core.\n"
+            "Typical: 0.6–0.8 (depends on score/metric)."
+        ),
+    )
 
+    p.add_argument(
+        "--support-core",
+        type=float,
+        default=0.5,
+        help=(
+            "Core-edge support threshold (bootstrap_support). Used together with --sim-core.\n"
+            "Core edges require: bootstrap_support >= support_core.\n"
+            "Typical: 0.3–0.8 (higher = stricter, fewer but more reliable edges)."
+        ),
+    )
+
+    p.add_argument(
+        "--sim-rescue-min",
+        type=float,
+        default=1e-5,
+        help=(
+            "Minimum similarity for a 'rescued' edge.\n"
+            "An edge is labeled 'rescued' if:\n"
+            "  sim_rescue_min <= mean_similarity < sim_core  AND  bootstrap_support >= support_rescue.\n"
+            "Set close to 0 to allow very low-similarity edges to be rescued if support is high; "
+            "increase (e.g., 0.1–0.3) to avoid rescuing extremely weak similarities."
+        ),
+    )
+
+    p.add_argument(
+        "--support-rescue",
+        type=float,
+        default=0.5,
+        help=(
+            "Support threshold for 'rescued' edges (bootstrap_support).\n"
+            "Rescued edges require: bootstrap_support >= support_rescue AND similarity is below --sim-core "
+            "but above --sim-rescue-min.\n"
+            "Often set equal to or higher than --support-core to rescue only very stable edges."
+        ),
+    )
     p.add_argument("--output-graphml", default=None, help="Output GNPS+rescued graphml filename")
 
 
