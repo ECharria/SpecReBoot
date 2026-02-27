@@ -17,7 +17,7 @@ def build_parser(p: argparse.ArgumentParser):
     p.add_argument("--mgf", required=True, type=Path, help="MGF used to build df_mean_sim/df_edge_sup")
     p.add_argument("--gnps-graphml", required=True, type=Path, help="GNPS network graphml (original)")
     p.add_argument("--outdir", default=Path("."), type=Path)
-    p.add_argument("--prefix", default="GNPS")
+    p.add_argument("--prefix", default="Results_GNPS")
 
     # preprocessing/binning/bootstrap
     p.add_argument("--cleaned-mgf", default=None)
