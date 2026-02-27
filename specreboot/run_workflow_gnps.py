@@ -14,13 +14,59 @@ from specreboot.networking.gnps_style import load_gnps_graph_and_id_map, add_res
 
 
 def build_parser(p: argparse.ArgumentParser):
-    p.add_argument("--mgf", required=True, type=Path, help="MGF used to build df_mean_sim/df_edge_sup")
-    p.add_argument("--gnps-graphml", required=True, type=Path, help="GNPS network graphml (original)")
-    p.add_argument("--outdir", default=Path("."), type=Path)
-    p.add_argument("--prefix", default="Results_GNPS")
+    p.add_argument(
+            "--mgf",
+            required=True,
+            type=Path,
+            help=(
+                "Input MGF file with MS/MS spectra. "
+                "This is the only required input."
+            ),
+    )    
+    p.add_argument(
+        "--ms2dp-model",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a trained MS2DeepScore model. Required if --similarities includes ms2deepscore."
+        ),
+    )
+    p.add_argument(
+            "--spec2vec-model",
+            type=Path,
+            default=None,
+            help=(
+                "Path to a trained Spec2Vec Word2Vec model. Required if --similarities includes spec2vec."
+            ),
+        )
+
+    p.add_argument(
+            "--outdir",
+            default=Path("."),
+            type=Path,
+            help=(
+                "Output directory where all CSV/PKL/GraphML files will be written. "
+                "Created if it does not exist."
+            ),
+        )
+    p.add_argument(
+            "--prefix",
+            default="Res_GNPS",
+            help=(
+                "Prefix used to name output files (CSV, PKL, GraphML, runtime log). "
+                "Example: --prefix NP2_run1"
+            ),
+        )
+    p.add_argument(
+            "--cleaned-mgf",
+            default=None,
+            help=(
+                "Optional path to write the cleaned MGF. "
+                "If omitted, a '<input>_cleaned.mgf' file is written into --outdir."
+            ),
+        )
 
     # preprocessing/binning/bootstrap
-    p.add_argument("--cleaned-mgf", default=None)
     p.add_argument(
         "--B",
         type=int,
