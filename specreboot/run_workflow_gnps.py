@@ -1,10 +1,8 @@
 # specreboot/run_workflow_gnps.py
 import argparse
-import time
 from pathlib import Path
 
 from matchms.importing import load_from_mgf
-from matchms.similarity import ModifiedCosine, CosineGreedy
 from matchms.similarity.FlashSimilarity import FlashSimilarity
 
 from specreboot.preprocessing.filtering import general_cleaning
@@ -12,6 +10,7 @@ from specreboot.binning.binning import global_bins as make_global_bins, bin_spec
 from specreboot.bootstrapping.bootstrapping import calculate_boostrapping
 from specreboot.networking.gnps_style import load_gnps_graph_and_id_map, add_rescued_edges_to_gnps_graph
 
+p = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
 
 def build_parser(p: argparse.ArgumentParser):
     p.add_argument(
@@ -23,6 +22,12 @@ def build_parser(p: argparse.ArgumentParser):
                 "This is the only required input."
             ),
     )    
+    p.add_argument(
+        "--gnps-graphml",
+        required=True,
+        type=Path,
+        help="Input GNPS GraphML network to which rescued edges will be added.",
+    )
     p.add_argument(
         "--ms2dp-model",
         type=Path,
@@ -119,12 +124,15 @@ def build_parser(p: argparse.ArgumentParser):
     # similarity choice (keep simple but flexible)
     p.add_argument(
         "--similarity",
-        default="modcos",
-        choices=["modcos", "cosine", "flash_cosine", "flash_modcosine"],
-        help="Similarity for bootstrapping",
+        default="modcosine",
+        choices=["cosine", "modcosine", "modcos"],
+        help=(
+            "Similarity metric to use (implemented with FlashSimilarity).\n"
+            "  - cosine: cosine similarity (FlashSimilarity fragment matching)\n"
+            "  - modcosine/modcos: modified cosine (FlashSimilarity hybrid matching)"
+        ),
     )
     p.add_argument("--tolerance", type=float, default=0.02, help="Tolerance for (mod)cosine")
-    p.add_argument("--flash-tolerance", type=float, default=0.01, help="Tolerance for FlashSimilarity")
 
     # mapping to GNPS nodes
     p.add_argument(
@@ -186,21 +194,20 @@ def build_parser(p: argparse.ArgumentParser):
 
 
 def _make_similarity(args):
-    if args.similarity == "modcos":
-        return ModifiedCosine(tolerance=args.tolerance)
-    if args.similarity == "cosine":
-        return CosineGreedy(tolerance=args.tolerance)
-    if args.similarity == "flash_cosine":
-        return FlashSimilarity(score_type="cosine", matching_mode="fragment", tolerance=args.flash_tolerance)
-    if args.similarity == "flash_modcosine":
-        return FlashSimilarity(score_type="cosine", matching_mode="hybrid", tolerance=args.flash_tolerance)
-    raise ValueError(f"Unknown similarity: {args.similarity}")
+    sim = args.similarity
+    if sim == "modcos":
+        sim = "modcosine"
 
+    if sim == "cosine":
+        return FlashSimilarity(score_type="cosine", matching_mode="fragment", tolerance=args.tolerance)
+
+    if sim == "modcosine":
+        return FlashSimilarity(score_type="cosine", matching_mode="hybrid", tolerance=args.tolerance)
+
+    raise ValueError(f"Unknown similarity: {args.similarity}")
 
 def run(args):
     args.outdir.mkdir(parents=True, exist_ok=True)
-    t0 = time.time()
-
     spectra = list(load_from_mgf(str(args.mgf)))
     cleaned_name = args.cleaned_mgf or str(args.outdir / f"{args.mgf.stem}_cleaned.mgf")
     spectra_cleaned, report = general_cleaning(spectra, file_name=cleaned_name)
@@ -253,11 +260,6 @@ def run(args):
         support_rescue=args.support_rescue,
         output_file=out_graph,
     )
-
-    elapsed = time.time() - t0
-    (args.outdir / f"runtime_{args.prefix}.txt").write_text(f"Total runtime: {elapsed/60:.2f} min ({elapsed:.1f} s)\n")
-    print(f"Total runtime: {elapsed/60:.2f} min ({elapsed:.1f} s)")
-    print(f"Wrote: {out_graph}")
 
 
 if __name__ == "__main__":

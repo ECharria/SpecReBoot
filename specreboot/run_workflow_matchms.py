@@ -1,7 +1,6 @@
 # specreboot/run_workflow_matchms.py
 import argparse
 import pickle
-import time
 from pathlib import Path
 
 from matchms.importing import load_from_mgf
@@ -12,6 +11,7 @@ from specreboot.binning.binning import global_bins as make_global_bins, bin_spec
 from specreboot.bootstrapping.bootstrapping import calculate_boostrapping
 from specreboot.networking.networking import build_base_graph, build_thresh_graph, build_core_rescue_graph
 
+p = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
 
 def build_parser(p: argparse.ArgumentParser):
     p.add_argument(
@@ -68,12 +68,15 @@ def build_parser(p: argparse.ArgumentParser):
     p.add_argument(
         "--similarities",
         nargs="+",
-        default=["flash_cosine", "flash_modcosine", "spec2vec", "ms2deepscore"],
-        choices=["all", "flash_cosine", "flash_modcosine", "spec2vec", "ms2deepscore"],
+        default=["cosine", "modcosine", "spec2vec", "ms2deepscore"],
+        choices=["all", "cosine", "modcosine", "modcos", "spec2vec", "ms2deepscore"],
         help=(
-            "Which similarity metrics to run. "
-            "Use: --similarities all (runs all), or list one/two metrics, e.g. "
-            "--similarities flash_modcosine, or --similarities flash_cosine spec2vec."
+            "Which similarity metrics to run.\n"
+            "Use: --similarities all (runs all), or list one/two metrics.\n"
+            "Examples:\n"
+            "  --similarities all\n"
+            "  --similarities modcosine\n"
+            "  --similarities cosine spec2vec"
         ),
     )
     p.add_argument(
@@ -152,8 +155,7 @@ def build_parser(p: argparse.ArgumentParser):
             type=float,
             default=0.01,
             help=(
-                "Fragment m/z tolerance (Da) for FlashSimilarity matching. "
-                "Used for both flash_cosine (fragment) and flash_modcosine (hybrid)."
+                "Fragment m/z tolerance (Da) for matching. "
             ),
         )
     
@@ -207,13 +209,12 @@ def build_parser(p: argparse.ArgumentParser):
 def _resolve_and_validate_similarities(args) -> list[str]:
     sims = list(args.similarities)
 
-    # Expand "all"
     if "all" in sims:
-        sims = ["flash_cosine", "flash_modcosine", "spec2vec", "ms2deepscore"]
+        sims = ["cosine", "modcosine", "spec2vec", "ms2deepscore"]
 
-    # De-duplicate while preserving order
-    seen = set()
-    sims = [s for s in sims if not (s in seen or seen.add(s))]
+    # normalize aliases if you want:
+    alias = {"modcos": "modcosine"}
+    sims = [alias.get(s, s) for s in sims]
 
     # Conditional requirements
     if "ms2deepscore" in sims and args.ms2dp_model is None:
@@ -275,7 +276,6 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
 
 def run(args):
     args.outdir.mkdir(parents=True, exist_ok=True)
-    t0 = time.time()
 
     spectra = load_from_mgf(str(args.mgf))
     cleaned_name = args.cleaned_mgf or str(args.outdir / f"{args.mgf.stem}_cleaned.mgf")
@@ -290,13 +290,13 @@ def run(args):
     sim_keys = _resolve_and_validate_similarities(args)
 
 
-    if "flash_cosine" in sim_keys:
-        similarity_objs["Flash_Cosine"] = FlashSimilarity(
+    if "cosine" in sim_keys:
+        similarity_objs["Cosine"] = FlashSimilarity(
             score_type="cosine", matching_mode="fragment", tolerance=args.tolerance
         )
 
-    if "flash_modcosine" in sim_keys:
-        similarity_objs["Flash_ModCosine"] = FlashSimilarity(
+    if "modcosine" in sim_keys:
+        similarity_objs["ModCosine"] = FlashSimilarity(
             score_type="cosine", matching_mode="hybrid", tolerance=args.tolerance
         )
 
@@ -340,12 +340,6 @@ def run(args):
             args,
             args.outdir,
         )
-
-        elapsed = time.time() - t0
-        (args.outdir / f"runtime_{args.prefix}.txt").write_text(
-            f"Total runtime: {elapsed/60:.2f} min ({elapsed:.1f} s)\n"
-        )
-        print(f"Total runtime: {elapsed/60:.2f} min ({elapsed:.1f} s)")
 
 
 

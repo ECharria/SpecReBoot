@@ -123,20 +123,39 @@ specreboot gnps --help
 Runs:
 1. preprocessing (general_cleaning)
 2. binning
-3. bootstrapping across multiple similarity scores
+3. bootstrapping across a single or multiple similarity scores
 4. exports CSV + GraphML networks + runtime log
+
+By default, all similarity metrics are run (cosine, modified cosine, spec2vec and ms2deepscore)
 
 Example:
 ```shell
 specreboot matchms \
-  --mgf "/.../input_spectra.mgf" \ #to configure
-  --ms2dp-model "/.../ms2deepscore_model.pt" \
-  --spec2vec-model "/.../Spec2Vec.model" \
-  --outdir "/.../output_matchms" \
+  --mgf "path_to_your_expectra.mgf" \ 
+  --ms2dp-model "path_to_your_ms2deepscore_model.pt" \
+  --spec2vec-model "path_to_your_Spec2Vec_model.model" \
+  --outdir "output_matchms" \
   --prefix "Reboot" \
   --B 30 --k 5 --n-jobs 4 \
-  --sim-threshold 0.7 --sim-threshold-ms2dp 0.8
+  --sim-threshold 0.7 \
+  --sim-threshold-ms2dp 0.8
 ```
+You can restrict the run to one or more metrics using --similarities.
+
+Example — only Modified Cosine:
+```shell
+specreboot matchms \
+  --mgf "/.../input_spectra.mgf" \
+  --similarities modcosine \
+  --tolerance 0.02 \
+  --outdir "/.../output_matchms" \
+  --prefix "Reboot_modcos" \
+  --B 30 --k 5 --n-jobs 4 \
+  --sim-threshold 0.7
+```
+You can also run two / three:
+Example — multiple selected metrics, just changing the argument:
+--similarities flash_cosine spec2vec
 
 ### Mode 2 — gnps (merge rescued edges into a GNPS network)
 Use this mode when you already have a GNPS network (GraphML) and want to:
@@ -147,14 +166,18 @@ Use this mode when you already have a GNPS network (GraphML) and want to:
 Example:
 ```shell
 specreboot gnps \
-  --mgf "/.../Spectra_MN.mgf" \
-  --gnps-graphml "/.../network_singletons.graphml" \
-  --outdir "/.../output_gnps" \
+  --mgf "path_to_mgf.mgf" \
+  --gnps-graphml "path_to_graphml.graphml" \
+  --outdir "output_gnps" \
   --prefix "Reboot" \
   --B 100 --k 5 --n-jobs 4 \
-  --similarity modcos --tolerance 0.02 \
+  --similarity modcos \
+  --tolerance 0.02 \
   --candidate-node-attrs "shared name" \
-  --sim-core 0.7 --support-core 0.5 --sim-rescue-min 1e-5 --support-rescue 0.5
+  --sim-core 0.7 \
+  --support-core 0.5 \
+  --sim-rescue-min 1e-5 \
+  --support-rescue 0.5
 ```
 ### Quick start — Exploring spectral connections between RiPPs (Case study from the preprint)
 This repository includes a small demo MS/MS dataset of RiPPs so you can quickly test whether SpecReBoot runs correctly on your machine.
@@ -167,7 +190,7 @@ specreboot matchms \
   --ms2dp-model "/path/to/ms2deepscore_model.pt" \
   --spec2vec-model "/path/to/spec2vec_model.model" \
   --outdir "/path/to/results_folder" \
-  --prefix "RiPPs" \
+  --prefix "Reboot" \
   --B 30 --k 5 --n-jobs 4 \
   --sim-threshold 0.7 --sim-threshold-ms2dp 0.8
 ```
