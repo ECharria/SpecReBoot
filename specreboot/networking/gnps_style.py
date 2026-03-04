@@ -1,5 +1,6 @@
 import networkx as nx
 import pandas as pd
+from specreboot.networking.networking import _filter_components
 
 
 def load_gnps_graph_and_id_map(
@@ -50,6 +51,8 @@ def add_rescued_edges_to_gnps_graph(
     support_core: float = 0.3,
     sim_rescue_min: float = 0.2,
     support_rescue: float = 0.4,
+    max_component_size: int | None = None,
+    cosine_delta: float = 0.02,
     output_file: str = "gnps_plus_rescued.graphml",
 ) -> nx.Graph:
     """
@@ -149,6 +152,9 @@ def add_rescued_edges_to_gnps_graph(
                     origin="bootstrap",
                     weight=sim,
                 )
+    
+    if max_component_size is not None:
+        _filter_components(G, max_component_size, cosine_delta)
 
     nx.write_graphml(G, output_file)
     return G

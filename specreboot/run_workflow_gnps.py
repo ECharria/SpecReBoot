@@ -190,6 +190,16 @@ def build_parser(p: argparse.ArgumentParser):
             "Often set equal to or higher than --support-core to rescue only very stable edges."
         ),
     )
+    p.add_argument(
+        "--max-component-size",
+        type=int,
+        default=100,
+        help=(
+            "Maximum allowed connected-component size in the output graph. "
+            "Components larger than this are trimmed by removing weakest edges "
+            "(prevents giant hairballs)."
+        ),
+    )
     p.add_argument("--output-graphml", default=None, help="Output GNPS+rescued graphml filename")
 
 
@@ -258,6 +268,7 @@ def run(args):
         support_core=args.support_core,
         sim_rescue_min=args.sim_rescue_min,
         support_rescue=args.support_rescue,
+        max_component_size=args.max_component_size,
         output_file=out_graph,
     )
 
