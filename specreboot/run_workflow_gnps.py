@@ -228,7 +228,7 @@ def run(args):
 
     similarity = _make_similarity(args)
 
-    df_mean_sim, df_edge_sup = calculate_boostrapping(
+    df_mean_sim, df_edge_sup, label_map = calculate_boostrapping(
         binned_spectra,
         bins,
         B=args.B,
@@ -243,6 +243,7 @@ def run(args):
 
     df_mean_sim.to_csv(args.outdir / f"{args.prefix}_bootstrap_mean_similarity.csv", index=False)
     df_edge_sup.to_csv(args.outdir / f"{args.prefix}_bootstrap_edge_support.csv", index=False)
+    label_map.to_csv(args.outdir / f"{args.prefix}_label_map.csv", index=False)
 
     gnps_network, id_map = load_gnps_graph_and_id_map(
         str(args.gnps_graphml),
