@@ -1,6 +1,5 @@
 # specreboot/run_workflow_matchms.py
 import argparse
-import pickle
 from pathlib import Path
 
 from matchms.importing import load_from_mgf
@@ -188,6 +187,15 @@ def build_parser(p: argparse.ArgumentParser):
             ),
         )
     p.add_argument(
+            "--batch-size",
+            type=int,
+            default=10,
+            help=(
+                "Number of bootstrap iterations to run in each batch. "
+                "This is a trade-off between memory usage and parallelization efficiency."
+            ),
+        )
+    p.add_argument(
             "--sim-rescue-min",
             type=float,
             default=1e-5,
@@ -227,26 +235,24 @@ def _resolve_and_validate_similarities(args) -> list[str]:
 
 
 def calculate_similarities(binned_spectra, bins, model_name: str, similarity, args, outdir: Path):
-    df_mean_sim, df_edge_sup, history = calculate_boostrapping(
+    df_mean_sim, df_edge_sup = calculate_boostrapping(
         binned_spectra,
         bins,
         B=args.B,
         k=args.k,
         similarity_metric=similarity,
+        batch_size=args.batch_size,
         n_jobs=args.n_jobs,
-        return_history=True,
-        track_bins=True,
-        return_label_map=True,
+        return_history=False,
+        track_bins=False,
+        return_label_map=False,
         label_mode=args.label_mode,
     )
 
     df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv", index=False)
     df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv", index=False)
 
-    with open(outdir / f"bootstrap_history_{args.prefix}_{model_name}.pkl", "wb") as f:
-        pickle.dump(history, f)
-
-    return df_mean_sim, df_edge_sup, history
+    return df_mean_sim, df_edge_sup
 
 
 def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_threshold: float, args, outdir: Path):
@@ -323,7 +329,7 @@ def run(args):
 
     #Run selected metrics
     for model_name, similarity in similarity_objs.items():
-        df_mean_sim, df_edge_sup, _ = calculate_similarities(
+        df_mean_sim, df_edge_sup = calculate_similarities(
             binned_spectra,
             bins,
             model_name,
