@@ -2,6 +2,15 @@ import networkx as nx
 import pandas as pd
 from specreboot.networking.networking import _filter_components
 
+def _make_node_only_copy(G_gnps: nx.Graph) -> nx.Graph:
+    """
+    Create a new graph with the same nodes and node attributes as G_gnps,
+    but with NO edges.
+    """
+    G_new = nx.Graph()
+    for n, attrs in G_gnps.nodes(data=True):
+        G_new.add_node(n, **dict(attrs))
+    return G_new
 
 def load_gnps_graph_and_id_map(
     graphml_path: str,
@@ -108,7 +117,7 @@ def add_rescued_edges_to_gnps_graph(
     nx.Graph
         Updated graph (GNPS + bootstrap overlay).
     """
-    G = G_gnps.copy()
+    G = _make_node_only_copy(G_gnps)
     nodes_in_graph = set(G.nodes())
 
     ids = list(df_mean_sim.index)
