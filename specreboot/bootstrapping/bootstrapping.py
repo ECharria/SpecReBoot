@@ -29,6 +29,7 @@ def calculate_boostrapping(
     If return_history is True:
         df_mean_sim, df_edge_sup, history        (history may include label_map)
     """
+    global_bins = np.array(global_bins)  # Important, a simple list will raise an error
 
     out_labels, label_info = _get_spectra_labels(label_mode, spectra_binned)
     history = dict(mean_sim=[], edge_sup=[], sampled_bins=[], missing_bins=[]) | label_info  # Just saves all metadata
