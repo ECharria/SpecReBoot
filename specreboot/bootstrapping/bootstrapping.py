@@ -1,10 +1,10 @@
 import numpy as np
-import pandas as pd
-from collections import defaultdict, Counter
-from matchms import calculate_scores
 from matchms import Spectrum
 from joblib import parallel_backend
-
+from typing import Any
+from tqdm import tqdm
+import pandas as pd
+from collections import Counter
 
 def calculate_boostrapping(
     spectra_binned,
@@ -29,38 +29,95 @@ def calculate_boostrapping(
     If return_history is True:
         df_mean_sim, df_edge_sup, history        (history may include label_map)
     """
+    # NOTE: due to floating point arithmatic, the resulting values in the cosine similarity matrix might differ with the orignal function with around <1e-7. 
+    
+    global_bins = np.array(global_bins)  # Important, a simple list will raise an error
 
-    # --- guardrails for the exact error you hit ---
-    if global_bins is None or not hasattr(global_bins, "__len__"):
-        raise TypeError(
-            "global_bins must be an array/list of bin m/z values. "
-            "Did you accidentally pass the global_bins *function* instead of the computed bins array?"
-        )
+    out_labels, label_info = _get_spectra_labels(label_mode, spectra_binned)
+    history = dict(mean_sim=[], edge_sup=[], sampled_bins=[], missing_bins=[]) | label_info  # Just saves all metadata
 
-    def make_unique(labels):
-        counts = Counter(labels)
-        seen = Counter()
-        out = []
-        for lab in labels:
-            lab = str(lab)
-            if counts[lab] == 1:
-                out.append(lab)
-            else:
-                seen[lab] += 1
-                out.append(f"{lab}__{seen[lab]}")
-        return out
+    dataset_size = len(spectra_binned)
+    random_generator = np.random.default_rng(seed)
 
-    rng = np.random.default_rng(seed)
+    total_pair_similarities = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the sum of all similarities of each pair combination
+    total_pair_counts       = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the nr of times a given pair is used in the bootstrapping
+    total_edge_support      = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the nr of times a given pair are each others closest k neighbours
 
-    N = len(spectra_binned)
-    global_bins_arr = np.asarray(global_bins)
-    P = len(global_bins_arr)
+    for b in tqdm(range(B)):
 
-    pair_sim_sum = defaultdict(float)
-    pair_counts = defaultdict(int)
-    edge_support = Counter()
+        masked_spectra, sampled_bins = _mask_spectra(random_generator, global_bins, spectra_binned)
 
-    # --- labels + unique internal IDs for mapping scores back to indices ---
+        # This is different now, but matches the internal workings of calculate_scores from matchms module
+        with parallel_backend("loky", n_jobs=n_jobs):
+            similarity_matrix = similarity_metric.matrix(masked_spectra, masked_spectra, array_type="numpy", is_symmetric=True)
+
+        top_k_nearest_neighbours = mutual_topk(similarity_matrix, k)
+
+        # Get the position of the pairs that we used in this iteration
+        similarity_matrix_binary        = (similarity_matrix != 0).astype(int)
+        # ^ This line requires attention:
+        #   currently, we're skipping all 0 values, because the orignial function iterates over a SparseMatrix that ALSO skips values that are 0. 
+        #   However, it's possible that a pair of spectra that both *not* empty could still result in a similarity score of 0. Currently, that is not counted, but maybe it should be. 
+        #   In other words, if spec A and spec B had a similarity that was 0.01, they are counted, but if they happen to have a similarity of 0.00, they are not counted. 
+        #   Is this intended behaviour?
+
+
+        top_k_nearest_neighbours_binary = (top_k_nearest_neighbours != 0).astype(int)
+
+        # Add the results if this iteration
+        total_pair_similarities += similarity_matrix
+        total_pair_counts       += similarity_matrix_binary
+        total_edge_support      += top_k_nearest_neighbours_binary
+
+        if return_history:
+            # Get the average of similarities
+            current_similarities = np.divide(
+                total_pair_similarities, 
+                total_pair_counts, 
+                out=np.zeros_like(total_pair_similarities, 
+                dtype=float),
+                where=total_pair_counts != 0
+            )
+            current_edge_support = total_edge_support / (b + 1)
+
+            history["mean_sim"].append(current_similarities)
+            history["edge_sup"].append(current_edge_support)
+
+        if track_bins:
+            used_bins   = np.unique(sampled_bins)
+            unused_bins = np.setdiff1d(global_bins, sampled_bins)
+
+            history["sampled_bins"].append(used_bins)
+            history["missing_bins"].append(unused_bins)
+     
+
+    # Get the average of similarities
+    mean_similarities = np.divide(
+        total_pair_similarities,
+        total_pair_counts,
+        out=np.zeros_like(total_pair_similarities, dtype=float),
+        where=total_pair_counts != 0
+    )
+    np.fill_diagonal(mean_similarities , 1)  # needed to exactly match original implementation; all spectra have a similarity of 1 to themselves
+    mean_edge_support = total_edge_support / B
+
+    # Needed to match correct return type
+    df_mean_sim = pd.DataFrame(mean_similarities, index=out_labels, columns=out_labels)
+    df_edge_sup = pd.DataFrame(mean_edge_support, index=out_labels, columns=out_labels)
+
+    # Return history according to settings
+    if return_label_map and not return_history:
+        return df_mean_sim, df_edge_sup, history["label_map"]
+    
+    if not return_history:
+        return df_mean_sim, df_edge_sup
+    
+    history = {k: v for k, v in history.items() if len(v) != 0}   # purge all missing data
+    return df_mean_sim, df_edge_sup, history
+
+
+
+def _get_spectra_labels(label_mode: str, spectra_binned: list[Spectrum]) -> tuple[list[str], dict[str, any]]:  # Logic from previous main function refactored into a helper function
     scan_labels = []
     feature_labels = []
     internal_ids = []
@@ -85,9 +142,9 @@ def calculate_boostrapping(
         id_to_index[internal_id] = idx
 
     # make labels safe for DataFrames/graphs
-    scan_labels_u = make_unique(scan_labels)
-    feature_labels_u = make_unique(feature_labels)
-    internal_ids_u = make_unique(internal_ids)
+    scan_labels_u = __make_unique(scan_labels)
+    feature_labels_u = __make_unique(feature_labels)
+    internal_ids_u = __make_unique(internal_ids)
 
     lm = (label_mode or "feature").lower()
     if lm == "scan":
@@ -105,155 +162,69 @@ def calculate_boostrapping(
         "feature_unique": feature_labels_u,
         "internal_id": internal_ids,
     })
+    label_info = dict(label_map=label_map, label_mode=lm)
+    return out_labels, label_info
 
-    # --- optional history ---
-    hist_mean_sim = []
-    hist_edge_sup = []
-    hist_sampled_bins = []
-    hist_missing_bins = []
 
-    # --- bootstraps ---
-    for b in range(B):
-        sampled_indices = rng.integers(0, P, size=P)
-        sampled_bins_arr = np.unique(global_bins_arr[sampled_indices])  # IMPORTANT: array, not set
+def __make_unique(labels: list[any]) -> list[str]:
+    counts = Counter(labels)
+    seen = Counter()
+    out = []
+    for lab in labels:
+        lab = str(lab)
+        if counts[lab] == 1:
+            out.append(lab)
+        else:
+            seen[lab] += 1
+            out.append(f"{lab}__{seen[lab]}")
+    return out
 
-        spectra_boot = []
-        n_empty = 0
 
-        for idx, (internal_id, spec) in enumerate(zip(internal_ids, spectra_binned)):
-            mz = spec.peaks.mz
-            intens = spec.peaks.intensities
+def mutual_topk(A: np.ndarray, k: int) -> np.ndarray:
+    """ gives a matrix in the shap of A, where a 1 means a pair are each others top-k neighbor """
 
-            mask = np.isin(mz, sampled_bins_arr)
-            mz_kept = mz[mask]
-            int_kept = intens[mask]
+    n = A.shape[0]
+    A_work = A.copy()
+    np.fill_diagonal(A_work, -np.inf)  # This makes sure self-similarity is not counted as a top neighbor
 
-            is_empty = (mz_kept.size == 0)
-            is_zero  = (int_kept.size == 0) or np.all(int_kept == 0)
-            is_bad   = (not np.isfinite(int_kept).all()) if int_kept.size else False
+    row_sorted = np.argsort(A_work, axis=1)  # Gives use the indices if the sorted values: [3, 2, 7, 1] -> [3, 1, 0, 2] (along one axis)
+    row_sorted = row_sorted[:, ::-1]  # Reverse the indices, so the index of the highest nr is first
+    row_topk = row_sorted[:, :k]  # Remove the part after the k-best neighbour
 
-            if is_empty or is_zero or is_bad:
-                n_empty += 1
-                dummy_mz = float(global_bins_arr.max() + 1000.0 + idx)
-                mz_kept  = np.array([dummy_mz], dtype="float32")
-                int_kept = np.array([1.0], dtype="float32")
+    row_mask = np.zeros_like(A_work, dtype=bool)
+    rows = np.arange(n)[:, None]  # Create a range of nrs [0, 1, 2, .., n] and make it 2d -> [[0, 1, 2, .., n]], needed to make mask
+    row_mask[rows, row_topk] = True  # Sets only the top neighbors to True
 
-            meta = {**spec.metadata, "internal_id": internal_id}
-            spectra_boot.append(
-                Spectrum(
-                    mz=mz_kept.astype("float32"),
-                    intensities=int_kept.astype("float32"),
-                    metadata=meta,
-                )
-            )
+    mutual_mask = row_mask & row_mask.T  # Only a value that is in *mutual* top k neighbors kept
 
-        if n_empty > 0:
-            print(f"[bootstrap {b+1}/{B}] invalid/empty spectra this replicate: {n_empty}", flush=True)
+    result = np.zeros_like(A)  
+    result[mutual_mask] = 1  # sets all the mutual top k neighbors to 1
+    return result
 
-        sim_matrix = np.zeros((N, N), dtype=float)
 
-        with parallel_backend("loky", n_jobs=n_jobs):
-            scores = calculate_scores(
-                references=spectra_boot,
-                queries=spectra_boot,
-                similarity_function=similarity_metric,
-                is_symmetric=True,
-            )
+def _mask_spectra(random_generator: Any, global_bins: np.ndarray, binned_spectra: list[Spectrum]) -> tuple[list[Spectrum], np.ndarray]:
+    result = []
 
-        for item in scores:
-            if len(item) == 3:
-                ref_spec, qry_spec, sim_val = item
-            else:
-                (ref_spec, qry_spec), sim_val = item
+    sampled_indices = random_generator.integers(0, len(global_bins), size=len(global_bins))
 
-            i = id_to_index[ref_spec.metadata["internal_id"]]
-            j = id_to_index[qry_spec.metadata["internal_id"]]
-            if i == j:
-                continue
+    sampled_bins = global_bins[sampled_indices]
+    sampled_bins = np.unique(sampled_bins)
 
-            sim = float(sim_val[0])
-            sim_matrix[i, j] = sim
-            sim_matrix[j, i] = sim
+    for index, spectrum in enumerate(binned_spectra):
+        mask = np.isin(spectrum.peaks.mz, sampled_bins)
 
-            key = tuple(sorted((internal_ids[i], internal_ids[j])))
-            pair_sim_sum[key] += sim
-            pair_counts[key] += 1
+        mz = spectrum.peaks.mz[mask] 
+        intensities = spectrum.peaks.intensities[mask]
 
-        # mutual-kNN edges
-        for i in range(N):
-            row_sorted = np.argsort(sim_matrix[i])[::-1]
-            row_sorted = row_sorted[row_sorted != i]
-            knn_i = row_sorted[:k]
+        mz = mz.astype("float32")
+        intensities = intensities.astype("float32")
 
-            for j in knn_i:
-                row_j_sorted = np.argsort(sim_matrix[j])[::-1]
-                row_j_sorted = row_j_sorted[row_j_sorted != j]
-                knn_j = row_j_sorted[:k]
+        if len(mz) == 0:
+            mz = np.array([ global_bins[0] ], dtype="float32")
+            intensities = np.array([0.0],     dtype="float32")
 
-                if i < j and (i in knn_j):
-                    key = tuple(sorted((internal_ids[i], internal_ids[j])))
-                    edge_support[key] += 1
+        masked_spectrum = Spectrum(mz, intensities, spectrum.metadata)
+        result.append(masked_spectrum)
 
-        # history
-        if return_history:
-            cur_mean = np.eye(N, dtype="float32")
-            for (id_i, id_j), total in pair_sim_sum.items():
-                ii = id_to_index[id_i]
-                jj = id_to_index[id_j]
-                cnt = pair_counts[(id_i, id_j)]
-                cur_mean[ii, jj] = total / cnt
-                cur_mean[jj, ii] = total / cnt
-
-            cur_edge = np.zeros((N, N), dtype="float32")
-            denom = float(b + 1)
-            for (id_i, id_j), cnt in edge_support.items():
-                ii = id_to_index[id_i]
-                jj = id_to_index[id_j]
-                cur_edge[ii, jj] = cnt / denom
-                cur_edge[jj, ii] = cnt / denom
-
-            hist_mean_sim.append(cur_mean)
-            hist_edge_sup.append(cur_edge)
-
-            if track_bins:
-                sampled_arr = np.unique(sampled_bins_arr)
-                missing_arr = np.setdiff1d(global_bins_arr, sampled_arr)
-                hist_sampled_bins.append(sampled_arr)
-                hist_missing_bins.append(missing_arr)
-
-        if (b + 1) % 5 == 0:
-            print(f"[bootstrap {b+1}/{B}] done",flush=True)
-
-    # aggregate
-    mean_sim = np.eye(N, dtype="float32")
-    for (id_i, id_j), total in pair_sim_sum.items():
-        i = id_to_index[id_i]
-        j = id_to_index[id_j]
-        cnt = pair_counts[(id_i, id_j)]
-        mean_sim[i, j] = total / cnt
-        mean_sim[j, i] = total / cnt
-
-    edge_mat = np.zeros((N, N), dtype="float32")
-    for (id_i, id_j), cnt in edge_support.items():
-        i = id_to_index[id_i]
-        j = id_to_index[id_j]
-        edge_mat[i, j] = cnt / B
-        edge_mat[j, i] = cnt / B
-
-    df_mean_sim = pd.DataFrame(mean_sim, index=out_labels, columns=out_labels)
-    df_edge_sup = pd.DataFrame(edge_mat, index=out_labels, columns=out_labels)
-
-    if not return_history:
-        if return_label_map:
-            return df_mean_sim, df_edge_sup, label_map
-        return df_mean_sim, df_edge_sup
-
-    history = {"mean_sim": hist_mean_sim, "edge_sup": hist_edge_sup}
-    if track_bins:
-        history["sampled_bins"] = hist_sampled_bins
-        history["missing_bins"] = hist_missing_bins
-    if return_label_map:
-        history["label_map"] = label_map
-        history["label_mode"] = lm
-
-    return df_mean_sim, df_edge_sup, history
+    return result, sampled_bins
+    
