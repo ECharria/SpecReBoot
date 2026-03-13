@@ -11,7 +11,6 @@ from specreboot.binning.binning import global_bins as make_global_bins, bin_spec
 from specreboot.bootstrapping.bootstrapping import calculate_boostrapping
 from specreboot.networking.networking import build_base_graph, build_thresh_graph, build_core_rescue_graph
 
-p = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
 
 def build_parser(p: argparse.ArgumentParser):
     p.add_argument(
@@ -24,12 +23,12 @@ def build_parser(p: argparse.ArgumentParser):
             ),
     )    
     p.add_argument(
-        "--ms2dp-model",
-        type=Path,
-        default=None,
-        help=(
-            "Path to a trained MS2DeepScore model. Required if --similarities includes ms2deepscore."
-        ),
+            "--ms2dp-model",
+            type=Path,
+            default=None,
+            help=(
+                "Path to a trained MS2DeepScore model. Required if --similarities includes ms2deepscore."
+            ),
     )
     p.add_argument(
             "--spec2vec-model",
@@ -38,8 +37,7 @@ def build_parser(p: argparse.ArgumentParser):
             help=(
                 "Path to a trained Spec2Vec Word2Vec model. Required if --similarities includes spec2vec."
             ),
-        )
-
+    )
     p.add_argument(
             "--outdir",
             default=Path("."),
@@ -48,7 +46,7 @@ def build_parser(p: argparse.ArgumentParser):
                 "Output directory where all CSV/PKL/GraphML files will be written. "
                 "Created if it does not exist."
             ),
-        )
+    )
     p.add_argument(
             "--prefix",
             default="Res_matchms",
@@ -56,7 +54,7 @@ def build_parser(p: argparse.ArgumentParser):
                 "Prefix used to name output files (CSV, PKL, GraphML, runtime log). "
                 "Example: --prefix NP2_run1"
             ),
-        )
+    )
     p.add_argument(
             "--cleaned-mgf",
             default=None,
@@ -64,58 +62,60 @@ def build_parser(p: argparse.ArgumentParser):
                 "Optional path to write the cleaned MGF. "
                 "If omitted, a '<input>_cleaned.mgf' file is written into --outdir."
             ),
-        )
-    p.add_argument(
-        "--similarities",
-        nargs="+",
-        default=["cosine", "modcosine", "spec2vec", "ms2deepscore"],
-        choices=["all", "cosine", "modcosine", "modcos", "spec2vec", "ms2deepscore"],
-        help=(
-            "Which similarity metrics to run.\n"
-            "Use: --similarities all (runs all), or list one/two metrics.\n"
-            "Examples:\n"
-            "  --similarities all\n"
-            "  --similarities modcosine\n"
-            "  --similarities cosine spec2vec"
-        ),
     )
     p.add_argument(
-        "--B",
-        type=int,
-        default=100,
-        help=(
-            "Number of bootstrap replicates. "
-            "Each replicate resamples peaks (within each spectrum) and recomputes similarities. "
-            "Higher B = more stable edge-support estimates but slower runtime. "
-            "Typical: 30 (quick), 100 (standard), 300+ (high confidence)."
-        ),
+            "--similarities",
+            nargs="+",
+            default=["cosine", "modcosine"],
+            choices=["all", "cosine", "modcosine", "modcos", "spec2vec", "ms2deepscore"],
+            help=(
+                "Which similarity metrics to run.\n"
+                "Use: --similarities all (runs all), or list one/two metrics.\n"
+                "Examples:\n"
+                "  --similarities all\n"
+                "  --similarities modcosine\n"
+                "  --similarities cosine spec2vec"
+            ),
     )
     p.add_argument(
-        "--k",
-        type=int,
-        default=5,
-        help=(
-            "Top-k neighbors per node to keep when building candidate edges in each bootstrap replicate "
-            "(i.e., for each spectrum keep only its k most similar spectra). "
-            "Higher k increases network density and runtime; lower k is stricter/sparser. "
-            "Typical: 5–20 depending on dataset size."
-        ),
+            "--B",
+            type=int,
+            default=100,
+            help=(
+                "Number of bootstrap replicates. "
+                "Each replicate resamples peaks (within each spectrum) and recomputes similarities. "
+                "Higher B = more stable edge-support estimates but slower runtime. "
+                "Typical: 30 (quick), 100 (standard), 300+ (high confidence)."
+            ),
     )
     p.add_argument(
-        "--decimals",
-        type=int,
-        default=2,
-        help=(
-            "Number of decimals used for m/z binning (global bin grid). "
-            "Example: 2 -> 0.01 m/z bins. More decimals = finer bins (potentially sparser); "
-            "fewer decimals = coarser bins (more merging)."
-        ),
+            "--k",
+            type=int,
+            default=5,
+            help=(
+                "Top-k neighbors per node to keep when building candidate edges in each bootstrap replicate "
+                "(i.e., for each spectrum keep only its k most similar spectra). "
+                "Higher k increases network density and runtime; lower k is stricter/sparser. "
+                "Typical: 5–20 depending on dataset size."
+            ),
     )
     p.add_argument(
-        "--n-jobs",
-        type=int,
-        default=8,
-        help="Number of parallel worker processes/threads used during bootstrapping.",
+            "--decimals",
+            type=int,
+            default=2,
+            help=(
+                "Number of decimals used for m/z binning (global bin grid). "
+                "Example: 2 -> 0.01 m/z bins. More decimals = finer bins (potentially sparser); "
+                "fewer decimals = coarser bins (more merging)."
+            ),
+    )
+    p.add_argument(
+            "--n-jobs",
+            type=int,
+            default=8,
+            help=(
+                "Number of parallel worker processes/threads used during bootstrapping.",
+            ),
     )
     p.add_argument(
             "--label-mode",
@@ -128,28 +128,26 @@ def build_parser(p: argparse.ArgumentParser):
                 "  - internal: use internal sequential ids\n"
                 "This affects node identifiers in CSV/GraphML and label maps."
             ),
-        )
-
+    )
     p.add_argument(
-        "--sim-threshold",
-        type=float,
-        default=0.7,
-        help=(
-            "Similarity threshold (mean similarity across bootstraps) for edge inclusion "
-            "when building graphs for cosine/modcosine/spec2vec.\n"
-            "Edges below this similarity are excluded regardless of support."
-        ),
+            "--sim-threshold",
+            type=float,
+            default=0.7,
+            help=(
+                "Similarity threshold (mean similarity across bootstraps) for edge inclusion "
+                "when building graphs for cosine/modcosine/spec2vec.\n"
+                "Edges below this similarity are excluded regardless of support."
+            ),
     )    
     p.add_argument(
-        "--sim-threshold-ms2dp",
-        type=float,
-        default=0.8,
-        help=(
-            "Similarity threshold (mean similarity) specifically for MS2DeepScore graphs. "
-            "MS2DeepScore often uses a higher cutoff than cosine-based scores."
-        ),
+            "--sim-threshold-ms2dp",
+            type=float,
+            default=0.8,
+            help=(
+                "Similarity threshold (mean similarity) specifically for MS2DeepScore graphs. "
+                "MS2DeepScore often uses a higher cutoff than cosine-based scores."
+            ),
     )
-
     p.add_argument(
             "--tolerance",
             type=float,
@@ -157,28 +155,35 @@ def build_parser(p: argparse.ArgumentParser):
             help=(
                 "Fragment m/z tolerance (Da) for matching. "
             ),
-        )
-    
-    p.add_argument(
-        "--support-threshold",
-        type=float,
-        default=0.5,
-        help=(
-            "Minimum bootstrap edge support for the 'threshold' graph.\n"
-            "Support is typically the fraction of bootstraps where an edge appears among top-k.\n"
-        ),
     )
     p.add_argument(
-        "--max-component-size",
-        type=int,
-        default=100,
-        help=(
-            "Maximum allowed connected-component size in the 'threshold' graph. "
-            "Components larger than this are trimmed according to your networking rules "
-            "(prevents giant hairballs)."
-        ),
+            "--support-threshold",
+            type=float,
+            default=0.5,
+            help=(
+                "Minimum bootstrap edge support for the 'threshold' graph.\n"
+                "Support is typically the fraction of bootstraps where an edge appears among top-k.\n"
+            ),
     )
-
+    p.add_argument(
+            "--max-component-size",
+            type=int,
+            default=100,
+            help=(
+                "Maximum allowed connected-component size in the 'threshold' graph. "
+                "Components larger than this are trimmed according to your networking rules "
+                "(prevents giant hairballs)."
+            ),
+    )
+    p.add_argument(
+            "--batch-size",
+            type=int,
+            default=10,
+            help=(
+                "Number of bootstrap iterations to run in each batch. "
+                "This is a trade-off between memory usage and parallelization efficiency."
+            ),
+    )
     p.add_argument(
             "--sim-rescue-min",
             type=float,
@@ -187,7 +192,21 @@ def build_parser(p: argparse.ArgumentParser):
                 "Minimum mean similarity required for a rescued edge (even if it connects into core). "
                 "This is a safety floor to prevent adding extremely weak similarities."
             ),
-        )
+    )
+    p.add_argument(
+            "--return-history",
+            action="store_true",
+            help=(
+                "Store cumulative bootstrap history (slower, more memory intensive).",
+            ),
+    )
+    p.add_argument(
+            "--track-bins",
+            action="store_true",
+            help=(
+                "Store sampled and missing bins for each bootstrap replicate (slower).",
+            ),
+    )
 
 def _resolve_and_validate_similarities(args) -> list[str]:
     sims = list(args.similarities)
@@ -210,26 +229,30 @@ def _resolve_and_validate_similarities(args) -> list[str]:
 
 
 def calculate_similarities(binned_spectra, bins, model_name: str, similarity, args, outdir: Path):
-    df_mean_sim, df_edge_sup, history = calculate_boostrapping(
+    result = calculate_boostrapping(
         binned_spectra,
         bins,
         B=args.B,
         k=args.k,
         similarity_metric=similarity,
+        batch_size=args.batch_size,
         n_jobs=args.n_jobs,
-        return_history=True,
-        track_bins=True,
+        return_history=args.return_history,
+        track_bins=args.track_bins,
         return_label_map=True,
         label_mode=args.label_mode,
     )
 
-    df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv", index=False)
-    df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv", index=False)
+    if args.return_history or args.track_bins:
+        df_mean_sim, df_edge_sup, history = result
+        df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv")
+        df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv")
+        return df_mean_sim, df_edge_sup, history
 
-    with open(outdir / f"bootstrap_history_{args.prefix}_{model_name}.pkl", "wb") as f:
-        pickle.dump(history, f)
-
-    return df_mean_sim, df_edge_sup, history
+    df_mean_sim, df_edge_sup = result
+    df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv")
+    df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv")
+    return df_mean_sim, df_edge_sup
 
 
 def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_threshold: float, args, outdir: Path):
@@ -251,9 +274,9 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
     build_core_rescue_graph(
         df_mean_sim, df_edge_sup,
         sim_core=sim_threshold,
-        support_core=args.support_threshold,
+        support_core=args.support_core,
         sim_rescue_min=args.sim_rescue_min,
-        support_rescue=args.support_threshold,
+        support_rescue=args.support_rescue,
         max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_rescued_{similarity_score}.graphml"),
     )
@@ -306,7 +329,7 @@ def run(args):
 
     #Run selected metrics
     for model_name, similarity in similarity_objs.items():
-        df_mean_sim, df_edge_sup, _ = calculate_similarities(
+        result = calculate_similarities(
             binned_spectra,
             bins,
             model_name,
@@ -314,6 +337,13 @@ def run(args):
             args,
             args.outdir,
         )
+
+        if args.return_history or args.track_bins:
+            df_mean_sim, df_edge_sup, history = result
+            with open(args.outdir / f"{args.prefix}_bootstrap_history_{model_name}.pkl", "wb") as f:
+                pickle.dump(history, f)
+        else:
+            df_mean_sim, df_edge_sup = result
 
         sim_thr = args.sim_threshold_ms2dp if model_name == "MS2DeepScore" else args.sim_threshold
 
@@ -329,6 +359,6 @@ def run(args):
 
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     build_parser(p)
     run(p.parse_args())
