@@ -12,6 +12,7 @@ from specreboot.networking.gnps_style import load_gnps_graph_and_id_map, add_thr
 
 
 def build_parser(p: argparse.ArgumentParser):
+    """Add command-line arguments for the GNPS workflow."""
     p.add_argument(
             "--mgf",
             required=True,
@@ -196,6 +197,8 @@ def build_parser(p: argparse.ArgumentParser):
 
 
 def _make_similarity(args):
+    """Create the similarity object selected through the CLI arguments."""
+    sim = args.similarity
     sim = args.similarity
     if sim == "modcos":
         sim = "modcosine"
@@ -209,17 +212,23 @@ def _make_similarity(args):
     raise ValueError(f"Unknown similarity: {args.similarity}")
 
 def run(args):
+    """Run the full GNPS workflow from spectra loading to graph export."""
     args.outdir.mkdir(parents=True, exist_ok=True)
+    
+    # --- Load and clean spectra ---
     spectra = list(load_from_mgf(str(args.mgf)))
     cleaned_name = args.cleaned_mgf or str(args.outdir / f"{args.mgf.stem}_cleaned.mgf")
     spectra_cleaned, report = general_cleaning(spectra, file_name=cleaned_name)
     print(report)
 
+    # --- Bin spectra for bootstrapping ---
     bins = make_global_bins(spectra_cleaned, args.decimals)
     binned_spectra = bin_spectra(spectra_cleaned, args.decimals)
 
+    # --- Create the requested similarity object ---
     similarity = _make_similarity(args)
 
+    # --- Run bootstrapping ----
     result = calculate_boostrapping(
         binned_spectra,
         bins,
@@ -236,11 +245,12 @@ def run(args):
 
     df_mean_sim, df_edge_sup, label_map = result
 
-
+    # --- Export similarity, support, and label-map outputs ---
     df_mean_sim.to_csv(args.outdir / f"{args.prefix}_bootstrap_mean_similarity.csv", index=False)
     df_edge_sup.to_csv(args.outdir / f"{args.prefix}_bootstrap_edge_support.csv", index=False)
     label_map.to_csv(args.outdir / f"{args.prefix}_label_map.csv", index=False)
 
+    # --- Map bootstrap labels back to GNPS node identifiers and add edges to the GNPS graph ---
     gnps_network, id_map = load_gnps_graph_and_id_map(
         str(args.gnps_graphml),
         df_mean_sim.index,
@@ -256,7 +266,7 @@ def run(args):
     out_graph_rescued = str(args.outdir / f"{args.prefix}_gnps_plus_rescued.graphml")
     out_graph_thresh = str(args.outdir / f"{args.prefix}_gnps_threshold.graphml")
 
-
+    # --- Build the threshold GNPS graph ---
     add_threshold_edges_to_gnps_graph(
         G_gnps=gnps_network,
         df_mean_sim=df_mean_sim,
@@ -268,7 +278,7 @@ def run(args):
         output_file=out_graph_thresh,
     )
 
-    # If your helper supports thresholds, pass them. If not, remove these keyword args.
+    # --- Build the rescued GNPS graph ---
     add_rescued_edges_to_gnps_graph(
         gnps_network,
         df_mean_sim,
