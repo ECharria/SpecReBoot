@@ -18,6 +18,35 @@ def _run_single_bootstrap(
     k,
     track_bins=False,
 ):
+    """
+    Run a single bootstrap replicate on globally binned spectra.
+
+    Parameters
+    -------
+    b : int
+        Bootstrap replicate index.
+    spectra_binned : list[Spectrum]
+        List of binned spectra.
+    global_bins_arr : np.ndarray
+        Array of global m/z bins used for resampling.
+    internal_ids : list[str]
+        Internal identifiers for the spectra.
+    id_to_index : dict[str, int]
+        Mapping from internal spectrum id to matrix index.
+    similarity_metric : callable
+        Similarity function/object used in calculate_scores.
+    seed : int
+        Base random seed.
+    k : int
+        Number of nearest neighbors used for mutual-kNN calculation.
+    track_bins : bool
+        Whether to store sampled and missing bins for this replicate.
+
+    Returns
+    -------
+    dict: Dictionary containing bootstrap similarity sums, similarity counts,
+    edge support, and optionally sampled/missing bins.
+    """
     rng = np.random.default_rng(seed + b)
 
     N = len(spectra_binned)
@@ -27,6 +56,7 @@ def _run_single_bootstrap(
     pair_counts = defaultdict(int)
     edge_support = Counter()
 
+    # --- Sample global bins with replacement for this bootstrap replicate ---
     sampled_indices = rng.integers(0, P, size=P)
     sampled_bins_arr = np.unique(global_bins_arr[sampled_indices])
 
@@ -40,6 +70,7 @@ def _run_single_bootstrap(
         mz_kept = mz[mask]
         int_kept = intens[mask]
 
+        # --- Add a dummy peak if no bins were retained after resampling ---
         if mz_kept.size == 0:
             dummy_mz = float(global_bins_arr.max() + 1000.0 + idx)
             mz_kept = np.array([dummy_mz], dtype="float32")
@@ -84,7 +115,7 @@ def _run_single_bootstrap(
         pair_sim_sum[key] += sim
         pair_counts[key] += 1
 
-    # mutual kNN
+    # --- Compute mutual-kNN based edge support for this bootstrap replicate ---
     k_eff = min(k, N - 1)
     all_knn = []
 
@@ -131,9 +162,47 @@ def run_bootstrap_batch(
     track_bins=False,
     verbose=False,
 ):
+    """
+    Run a batch of bootstrap replicates.
+
+    Parameters
+    -------
+    batch_bootstrap_ids : list[int]
+        Bootstrap replicate indices to run in this batch.
+    spectra_binned : list[Spectrum]
+        List of binned spectra.
+    global_bins_arr : np.ndarray
+        Array of global m/z bins used for resampling.
+    internal_ids : list[str]
+        Internal identifiers for the spectra.
+    id_to_index : dict[str, int]
+        Mapping from internal spectrum id to matrix index.
+    similarity_metric : callable
+        Similarity function/object used in calculate_scores.
+    seed : int
+        Base random seed.
+    k : int
+        Number of nearest neighbors used for mutual-kNN support.
+    B : int
+        Total number of bootstrap replicates.
+    collect_history : bool
+        Whether to return per-bootstrap results instead of aggregated batch totals.
+    track_bins : bool
+        Whether to store sampled and missing bins for each bootstrap.
+    verbose : bool
+        Whether to print progress information.
+
+    Returns
+    -------
+    tuple or list:
+    - If collect_history is False:
+        returns aggregated batch results: (batch_pair_sim_sum, batch_pair_counts, batch_edge_support)
+    - If collect_history is True:
+        returns a list with one result dictionary per bootstrap replicate.
+    """
     t_batch_start = time.perf_counter()
 
-    # Fast mode - No history or bin tracking
+    # --- Fast mode: No history or bin tracking ---
     if not collect_history:
         batch_pair_sim_sum = defaultdict(float)
         batch_pair_counts = defaultdict(int)
@@ -174,7 +243,7 @@ def run_bootstrap_batch(
 
         return batch_pair_sim_sum, batch_pair_counts, batch_edge_support
     
-    # History mode - Collect detailed results for each bootstrap
+    # --- History mode: Collect detailed results for each bootstrap ---
     batch_results = []
 
     for b in batch_bootstrap_ids:
@@ -220,6 +289,51 @@ def calculate_boostrapping(
     return_label_map=True,
     verbose: bool = True,
 ):
+    """
+    Calculate bootstrapped mean similarity and edge support matrices.
+
+    Parameters
+    -------
+    spectra_binned : list[Spectrum]
+        List of binned spectra.
+    global_bins : array-like
+        Global m/z bins used as the bootstrap sampling space.
+    B : int
+        Number of bootstrap replicates.
+    k : int
+        Number of nearest neighbors used for mutual-kNN edge support.
+    similarity_metric : Similarity function/object used in calculate_scores.
+    n_jobs : int
+        Number of workers used for parallel batch execution.
+    batch_size : int
+        Number of bootstrap replicates processed per batch.
+    seed : int
+        Base random seed for bootstrap resampling.
+    return_history : bool
+        Whether to return cumulative bootstrap history.
+    track_bins : bool
+        Whether to store sampled and missing bins for each bootstrap.
+    label_mode : str
+        Output label type. Options are "feature", "scan", or "internal".
+    return_label_map : bool
+        Whether to return the mapping between output labels and internal identifiers.
+    verbose : bool
+        Whether to print progress and timing information.
+
+    Returns
+    -------
+    tuple:
+    If return_history is False and return_label_map is False:
+        (df_mean_sim, df_edge_sup)
+    If return_history is False and return_label_map is True:
+        (df_mean_sim, df_edge_sup, label_map)
+    If return_history is True:
+        (df_mean_sim, df_edge_sup, history)
+
+    Notes:
+    - Bootstraps are executed in batches and parallelized across workers.
+    - Edge support is calculated from mutual-kNN recovery across bootstraps.
+    """
     if similarity_metric is None:
         raise ValueError("similarity_metric must be provided")
 
@@ -237,6 +351,7 @@ def calculate_boostrapping(
 
 
     def make_unique(labels):
+        """Make labels unique by appending a suffix to duplicated values"""
         counts = Counter(labels)
         seen = Counter()
         out = []
@@ -261,6 +376,7 @@ def calculate_boostrapping(
     internal_ids = []
     id_to_index = {}
 
+    # --- Build scan, feature, and internal labels for each spectrum ---
     for idx, spec in enumerate(spectra_binned):
         md = spec.metadata
 
@@ -349,7 +465,7 @@ def calculate_boostrapping(
             flush=True,
         )
 
-    # Fast mode - just aggregate batch results without reconstructing history
+    # --- Fast mode: aggregate batch results without reconstructing per-bootstrap history ---
     if not collect_history:
         if verbose:
             print("Merging batch results...", flush=True)
@@ -395,7 +511,7 @@ def calculate_boostrapping(
             return df_mean_sim, df_edge_sup, label_map
         return df_mean_sim, df_edge_sup
 
-    # History mode - reconstruct cumulative history from per-bootstrap results
+    # --- History mode: reconstruct cumulative results from individual bootstraps ---
     if verbose:
         print("Reconstructing cumulative history from per-bootstrap results...", flush=True)
 
