@@ -44,3 +44,41 @@ def general_cleaning(
 
     return cleaned_spectra, report
 
+
+def spectra_harmonization(
+    spectra: List[Spectrum],
+    file_name: str,
+    create_report: bool = True
+) -> Tuple[List[Spectrum], dict]:
+    """
+    Just from the gnps output, spectra is harmonized with very default filters, so keeping as most nodes are
+
+    See:
+    https://github.com/matchms/matchms/blob/33704801aa19b31ddeb1c636271236fdcb4b70d9
+    /matchms/filtering/default_pipelines.py#L77
+
+    Parameters
+    ----------
+    spectra : list of Spectrum
+        Input spectra to be cleaned.
+    file_name : str
+        Name for the output cleaned spectra file (used by Matchms).
+    create_report : bool, optional
+        Whether to generate a Matchms filter report, by default True.
+
+    Returns
+    -------
+    harmonized_spectra : list of Spectrum
+        The processed spectra after applying Matchms harmonization.
+    report : dict
+        Processing report returned by the SpectrumProcessor.
+    """
+    spectrum_processor = SpectrumProcessor(DEFAULT_FILTERS)
+
+    cleaned_spectra, report = spectrum_processor.process_spectra(
+        spectra,
+        cleaned_spectra_file=file_name,
+        create_report=create_report,
+    )
+
+    return cleaned_spectra, report
