@@ -5,7 +5,7 @@ from pathlib import Path
 from matchms.importing import load_from_mgf
 from matchms.similarity.FlashSimilarity import FlashSimilarity
 
-from specreboot.preprocessing.filtering import general_cleaning
+from specreboot.preprocessing.filtering import spectra_harmonization
 from specreboot.binning.binning import global_bins as make_global_bins, bin_spectra
 from specreboot.bootstrapping.bootstrapping import calculate_boostrapping
 from specreboot.networking.gnps_style import load_gnps_graph_and_id_map, add_threshold_edges_to_gnps_graph, add_rescued_edges_to_gnps_graph
@@ -218,7 +218,7 @@ def run(args):
     # --- Load and clean spectra ---
     spectra = list(load_from_mgf(str(args.mgf)))
     cleaned_name = args.cleaned_mgf or str(args.outdir / f"{args.mgf.stem}_cleaned.mgf")
-    spectra_cleaned, report = general_cleaning(spectra, file_name=cleaned_name)
+    spectra_cleaned, report = spectra_harmonization(spectra, file_name=cleaned_name)
     print(report)
 
     # --- Bin spectra for bootstrapping ---
