@@ -241,7 +241,7 @@ def calculate_similarities(binned_spectra, bins, model_name: str, similarity, ar
         n_jobs=args.n_jobs,
         return_history=args.return_history,
         track_bins=args.track_bins,
-        return_label_map=True, # label_map will be stored inside the returned history object
+        return_label_map=False, # label_map will be stored inside the returned history object
         label_mode=args.label_mode,
     )
 
