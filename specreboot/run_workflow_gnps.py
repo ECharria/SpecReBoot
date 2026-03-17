@@ -119,7 +119,7 @@ def build_parser(p: argparse.ArgumentParser):
             type=int,
             default=8,
             help=(
-                "Number of parallel worker processes/threads used during bootstrapping.",
+                "Number of parallel worker processes/threads used during bootstrapping."
             ),
     )
     p.add_argument(
