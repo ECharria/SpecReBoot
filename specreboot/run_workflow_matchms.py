@@ -2,6 +2,8 @@
 import argparse
 import pickle
 from pathlib import Path
+import time
+
 
 from matchms.importing import load_from_mgf
 from matchms.similarity.FlashSimilarity import FlashSimilarity
@@ -178,7 +180,15 @@ def build_parser(p: argparse.ArgumentParser):
             "(prevents giant hairballs)."
         ),
     )
-
+    # p.add_argument(
+    #         "--support-core",
+    #         type=float,
+    #         default=0.5,
+    #         help=(
+    #             "Bootstrap support threshold for defining 'core' edges in the rescue graph. "
+    #             "Core edges are high-support anchors used to rescue additional edges."
+    #         ),
+    #     )
     p.add_argument(
             "--sim-rescue-min",
             type=float,
@@ -188,6 +198,15 @@ def build_parser(p: argparse.ArgumentParser):
                 "This is a safety floor to prevent adding extremely weak similarities."
             ),
         )
+    # p.add_argument(
+    #     "--support-rescue",
+    #     type=float,
+    #     default=0.5,
+    #     help=(
+    #         "Bootstrap support threshold for edges considered eligible for rescue into the core. "
+    #         "Often equal to --support-core, but can be tuned independently."
+    #     ),
+    # )
 
 def _resolve_and_validate_similarities(args) -> list[str]:
     sims = list(args.similarities)
@@ -251,9 +270,9 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
     build_core_rescue_graph(
         df_mean_sim, df_edge_sup,
         sim_core=sim_threshold,
-        support_core=args.support_threshold,
+        support_core=args.support_core,
         sim_rescue_min=args.sim_rescue_min,
-        support_rescue=args.support_threshold,
+        support_rescue=args.support_rescue,
         max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_rescued_{similarity_score}.graphml"),
     )
@@ -306,6 +325,7 @@ def run(args):
 
     #Run selected metrics
     for model_name, similarity in similarity_objs.items():
+        start_time = time.time()
         df_mean_sim, df_edge_sup, _ = calculate_similarities(
             binned_spectra,
             bins,
@@ -325,8 +345,10 @@ def run(args):
             args,
             args.outdir,
         )
-
-
+        elapsed = time.time() - start_time
+        runtime_file = args.outdir / f"runtime_MSn_{model_name}.txt"
+        with open(runtime_file, "w") as f:
+            f.write(f"Total runtime: {elapsed/60:.2f} min ({elapsed:.1f} s)\n")
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
