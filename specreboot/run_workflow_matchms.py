@@ -115,7 +115,7 @@ def build_parser(p: argparse.ArgumentParser):
             type=int,
             default=8,
             help=(
-                "Number of parallel worker processes/threads used during bootstrapping.",
+                "Number of parallel worker processes/threads used during bootstrapping."
             ),
     )
     p.add_argument(
@@ -198,14 +198,14 @@ def build_parser(p: argparse.ArgumentParser):
             "--return-history",
             action="store_true",
             help=(
-                "Store cumulative bootstrap history (slower, more memory intensive).",
+                "Store cumulative bootstrap history (slower, more memory intensive)."
             ),
     )
     p.add_argument(
             "--track-bins",
             action="store_true",
             help=(
-                "Store sampled and missing bins for each bootstrap replicate (slower).",
+                "Store sampled and missing bins for each bootstrap replicate (slower)."
             ),
     )
 
