@@ -1,4 +1,5 @@
 from pathlib import Path
+from matchms import Spectrum
 from matchms.importing import load_from_mgf
 from matchms.similarity.FlashSimilarity import FlashSimilarity
 
@@ -8,52 +9,37 @@ from specreboot.library.library_matching import (
     collect_results,
     get_spectrum_id,
     summarize_top_annotation,
-    score_candidates,
-    restrict_library_to_top_n,
-    _run_single_library_bootstrap,
 )
-from specreboot.binning.binning import global_bins, bin_spectra
-import numpy as np
 
 outdir = Path("/lustre/BIF/nobackup/charr003/projects/PostDoc/SpecReBoot_results/lib_match")
 outdir.mkdir(parents=True, exist_ok=True)
 
-query_spectra, _ = general_cleaning(
-    load_from_mgf("/lustre/BIF/nobackup/charr003/projects/PostDoc/SpecReBoot_results/data/pesticides_test.mgf"),
-    file_name=str(outdir / "pesticides_test_cleaned.mgf"),
-)
-library_spectra, _ = general_cleaning(
-    load_from_mgf("/lustre/BIF/nobackup/charr003/projects/PostDoc/SpecReBoot_results/data/GNPS-NP-feature-id.mgf"),
-    file_name=str(outdir / "library_cleaned.mgf"),
-)
-
-similarity_metric = FlashSimilarity(score_type="cosine", matching_mode="fragment", tolerance=0.01)
-
-# --- Diagnostic: inspect bootstrap score distribution for the first query ---
-query = query_spectra[0]
-ranked = score_candidates(query, library_spectra, similarity_metric)
-top_matches, restricted_library = restrict_library_to_top_n(ranked, library_spectra, 100)
-candidate_ids = [m.candidate_id for m in top_matches]
-
-bins = global_bins([query], decimals=2)  # query only
-global_bins_arr = np.asarray(bins, dtype="float32")
-
-query_binned = bin_spectra([query], 2)[0]
-library_binned = bin_spectra(list(restricted_library), 2)
-
-print(f"\n--- Diagnostic for {get_spectrum_id(query)} ---")
-print(f"Original top hit: {top_matches[0].candidate_id}, score: {top_matches[0].original_score:.4f}")
-print(f"Query peaks after binning: {query_binned.peaks.mz.size}")
-print(f"Global bins (query-only): {len(bins)}")
-
-for b in range(5):
-    res = _run_single_library_bootstrap(
-        b=b, query_binned=query_binned, library_binned=library_binned,
-        candidate_ids=candidate_ids, global_bins_arr=global_bins_arr,
-        similarity_metric=similarity_metric, seed=42, score_threshold=0.7,
+# --- Load query spectra (clean if needed) ---
+query_cleaned_path = outdir / "test_cleaned.mgf"
+if query_cleaned_path.exists():
+    query_spectra = list(load_from_mgf(str(query_cleaned_path)))
+    print(f"Loaded {len(query_spectra)} pre-cleaned query spectra from {query_cleaned_path}")
+else:
+    query_spectra, _ = general_cleaning(
+        load_from_mgf("/lustre/BIF/nobackup/charr003/projects/PostDoc/SpecReBoot_results/data/LibraryMatch_test.mgf"),
+        file_name=str(query_cleaned_path),
     )
-    top_cid, top_score = res["boot_scores"][0]
-    print(f"  replicate {b}: top hit {top_cid}, score {top_score:.4f}")
+    print(f"Cleaned and saved {len(query_spectra)} query spectra to {query_cleaned_path}")
+
+# --- Load library spectra (clean if needed) ---
+library_cleaned_path = outdir / "library_cleaned.mgf"
+if library_cleaned_path.exists():
+    library_spectra = list(load_from_mgf(str(library_cleaned_path)))
+    print(f"Loaded {len(library_spectra)} pre-cleaned library spectra from {library_cleaned_path}")
+else:
+    library_spectra, _ = general_cleaning(
+        load_from_mgf("/lustre/BIF/nobackup/charr003/projects/PostDoc/SpecReBoot_results/data/MSn_COCONUT-featue-id.mgf"),
+        file_name=str(library_cleaned_path),
+    )
+    print(f"Cleaned and saved {len(library_spectra)} library spectra to {library_cleaned_path}")
+
+# --- Similarity metric ---
+similarity_metric = FlashSimilarity(score_type="cosine", matching_mode="fragment", tolerance=0.01)
 
 # --- Main loop ---
 results = []
@@ -83,6 +69,6 @@ if skipped:
     print(f"Skipped: {skipped}")
 
 if results:
-    top_hits, all_stats = collect_results(results, outdir=outdir, prefix="pesticides_cosine")
+    top_hits, all_stats = collect_results(results, outdir=outdir, prefix="test_cosine")
     print(f"\nSaved results to {outdir}")
     print(top_hits)
