@@ -270,9 +270,9 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
     build_core_rescue_graph(
         df_mean_sim, df_edge_sup,
         sim_core=sim_threshold,
-        support_core=args.support_core,
+        support_core=args.support_threshold,
         sim_rescue_min=args.sim_rescue_min,
-        support_rescue=args.support_rescue,
+        support_rescue=args.support_threshold,
         max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_rescued_{similarity_score}.graphml"),
     )
