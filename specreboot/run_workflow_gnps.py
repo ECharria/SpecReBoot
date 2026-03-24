@@ -7,7 +7,7 @@ from matchms.similarity.FlashSimilarity import FlashSimilarity
 
 from specreboot.preprocessing.filtering import spectra_harmonization
 from specreboot.binning.binning import global_bins as make_global_bins, bin_spectra
-from specreboot.bootstrapping.bootstrapping import calculate_boostrapping
+from specreboot.bootstrapping.bootstrapping import calculate_bootstrapping
 from specreboot.networking.gnps_style import load_gnps_graph_and_id_map, add_threshold_edges_to_gnps_graph, add_rescued_edges_to_gnps_graph
 
 
@@ -229,7 +229,7 @@ def run(args):
     similarity = _make_similarity(args)
 
     # --- Run bootstrapping ----
-    result = calculate_boostrapping(
+    result = calculate_bootstrapping(
         binned_spectra,
         bins,
         B=args.B,

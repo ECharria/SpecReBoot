@@ -8,7 +8,7 @@ from matchms.similarity.FlashSimilarity import FlashSimilarity
 
 from specreboot.preprocessing.filtering import general_cleaning
 from specreboot.binning.binning import global_bins as make_global_bins, bin_spectra
-from specreboot.bootstrapping.bootstrapping import calculate_boostrapping
+from specreboot.bootstrapping.bootstrapping import calculate_bootstrapping
 from specreboot.networking.networking import build_base_graph, build_thresh_graph, build_core_rescue_graph
 
 
@@ -231,7 +231,7 @@ def _resolve_and_validate_similarities(args) -> list[str]:
 
 def calculate_similarities(binned_spectra, bins, model_name: str, similarity, args, outdir: Path):
     """Run bootstrapping for one similarity metric and export the output matrices."""
-    result = calculate_boostrapping(
+    result = calculate_bootstrapping(
         binned_spectra,
         bins,
         B=args.B,
