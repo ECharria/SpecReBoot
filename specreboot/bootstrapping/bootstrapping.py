@@ -121,16 +121,19 @@ def calculate_bootstrapping(
 
     print(f"Total bootstrapping completed in {total_end - total_start:.2f} seconds", flush=True)
 
-
     if track_bins:
         history["sampled_bins"] = [h["sampled_bins"] for h in sorted(all_history, key=lambda x: x["b"])]
         history["missing_bins"] = [h["missing_bins"] for h in sorted(all_history, key=lambda x: x["b"])]
 
+    if return_history:
+        if return_label_map:
+            history |= label_info
+        history = {k: v for k, v in history.items() if len(v) != 0}
+        return df_mean_sim, df_edge_sup, history
+
     if return_label_map:
-        history |= label_info
-    
-    history = {k: v for k, v in history.items() if len(v) != 0}   # purge all missing data
-    return df_mean_sim, df_edge_sup, history
+        return df_mean_sim, df_edge_sup, label_info["label_map"]
+    return df_mean_sim, df_edge_sup
 
 
 
