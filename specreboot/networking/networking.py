@@ -1,4 +1,5 @@
 from typing import Optional
+import numpy as np
 import pandas as pd
 import networkx as nx
 
@@ -100,20 +101,23 @@ def build_base_graph(
     _validate_matrix_pair(df_mean_sim, df_support)
 
     G = nx.Graph()
-    scan_ids = df_mean_sim.index.tolist()
+    scan_ids = [str(x) for x in df_mean_sim.index.tolist()]
     G.add_nodes_from(scan_ids)
 
+    sim = df_mean_sim.values
+    sup = df_support.values
     n = len(scan_ids)
-    for i in range(n):
-        for j in range(i + 1, n):
-            sim = df_mean_sim.iloc[i, j]
-            if sim >= sim_threshold:
-                sup = df_support.iloc[i, j]
-                G.add_edge(
-                    scan_ids[i], scan_ids[j],
-                    weight=sim,
-                    bootstrap_support=sup
-                )
+
+    i_idx, j_idx = np.triu_indices(n, k=1)
+    sim_vals = sim[i_idx, j_idx]
+    sup_vals = sup[i_idx, j_idx]
+
+    mask = sim_vals >= sim_threshold
+    edges = [
+        (scan_ids[i], scan_ids[j], {"weight": float(s), "bootstrap_support": float(p)})
+        for i, j, s, p in zip(i_idx[mask], j_idx[mask], sim_vals[mask], sup_vals[mask])
+    ]
+    G.add_edges_from(edges)
 
     # Only filter if parameter is provided
     if max_component_size is not None:
@@ -121,8 +125,6 @@ def build_base_graph(
 
     nx.write_graphml(G, output_file)
     return G
-
-
 
 
 # Function 2: Dual-threshold similarity + support graph
@@ -144,28 +146,29 @@ def build_thresh_graph(
     _validate_matrix_pair(df_mean_sim, df_support)
 
     G = nx.Graph()
-    scan_ids = df_mean_sim.index.tolist()
+    scan_ids = [str(x) for x in df_mean_sim.index.tolist()]
     G.add_nodes_from(scan_ids)
 
+    sim = df_mean_sim.values
+    sup = df_support.values
     n = len(scan_ids)
-    for i in range(n):
-        for j in range(i + 1, n):
-            sim = df_mean_sim.iloc[i, j]
-            sup = df_support.iloc[i, j]
-            if sim >= sim_threshold and sup >= support_threshold:
-                G.add_edge(
-                    scan_ids[i], scan_ids[j],
-                    weight=sim,
-                    bootstrap_support=sup
-                )
+
+    i_idx, j_idx = np.triu_indices(n, k=1)
+    sim_vals = sim[i_idx, j_idx]
+    sup_vals = sup[i_idx, j_idx]
+
+    mask = (sim_vals >= sim_threshold) & (sup_vals >= support_threshold)
+    edges = [
+        (scan_ids[i], scan_ids[j], {"weight": float(s), "bootstrap_support": float(p)})
+        for i, j, s, p in zip(i_idx[mask], j_idx[mask], sim_vals[mask], sup_vals[mask])
+    ]
+    G.add_edges_from(edges)
 
     if max_component_size is not None:
         _filter_components(G, max_component_size, cosine_delta)
 
     nx.write_graphml(G, output_file)
     return G
-
-
 
 
 # Function 3: Multi-class (core + rescued edges)
@@ -189,33 +192,31 @@ def build_core_rescue_graph(
     _validate_matrix_pair(df_mean_sim, df_support)
 
     G = nx.Graph()
-    scan_ids = df_mean_sim.index.tolist()
+    scan_ids = [str(x) for x in df_mean_sim.index.tolist()]
     G.add_nodes_from(scan_ids)
 
+    sim = df_mean_sim.values
+    sup = df_support.values
     n = len(scan_ids)
-    for i in range(n):
-        for j in range(i + 1, n):
-            sim = df_mean_sim.iloc[i, j]
-            sup = df_support.iloc[i, j]
 
-            if sim >= sim_core and sup >= support_core:
-                label = "core"
-            elif sim_rescue_min <= sim < sim_core and sup >= support_rescue:
-                label = "rescued"
-            else:
-                continue
+    i_idx, j_idx = np.triu_indices(n, k=1)
+    sim_vals = sim[i_idx, j_idx]
+    sup_vals = sup[i_idx, j_idx]
 
-            G.add_edge(
-                scan_ids[i], scan_ids[j],
-                weight=sim,
-                bootstrap_support=sup,
-                edge_class=label,
-            )
+    core_mask   = (sim_vals >= sim_core)       & (sup_vals >= support_core)
+    rescue_mask = (sim_vals >= sim_rescue_min)  & (sim_vals < sim_core) & (sup_vals >= support_rescue)
+    either_mask = core_mask | rescue_mask
+
+    labels = np.where(core_mask[either_mask], "core", "rescued").astype(str).astype(str)
+
+    edges = [
+        (scan_ids[i], scan_ids[j], {"weight": float(s), "bootstrap_support": float(p), "edge_class": str(lab)})
+        for i, j, s, p, lab in zip(i_idx[either_mask], j_idx[either_mask], sim_vals[either_mask], sup_vals[either_mask], labels)
+    ]
+    G.add_edges_from(edges)
 
     if max_component_size is not None:
         _filter_components(G, max_component_size, cosine_delta)
 
     nx.write_graphml(G, output_file)
     return G
-
-
