@@ -289,6 +289,74 @@ If the run completes successfully, results will include:
 
 These outputs reproduce the RiPP case study discussed in the preprint and can be used as a reference for adapting SpecReBoot to your own datasets!
 
+## New - Confidence-aware library matching (Under development) 🚧
+
+In addition to the molecular networking, SpecReBoot now includes a library matching module for confidence-aware spectral annotation. This module applies the same core idea of bootstrap resampling to query–library matching, allowing library hits to be evaluated not only by their original score but also by their robustness to perturbation of the fragment evidence.
+
+### Concept
+
+For a given query spectrum, the workflow first performs a standard library search and retains the top-N candidate library spectra. It then constructs a global bin space from the query spectrum fragment bins only. In each bootstrap replicate, bins are resampled with replacement from this query-derived bin space, and the sampled bins define a shared mask that is applied to both the query and each candidate spectrum before rescoring. This yields a distribution of bootstrap similarity scores for every candidate in the top-N subset.
+
+The final output summarizes each candidate by both score-based and confidence-aware metrics.
+
+### Main steps
+
+1. Score the query spectrum against the full library.
+2. Retain the top-N candidate library spectra.
+3. Build the bootstrap bin space from the query spectrum only.
+4. Bin the query and candidate spectra.
+5. Run B bootstrap replicates by resampling query-derived bins.
+6. Recalculate query–candidate similarity in each replicate.
+7. Summarize bootstrap-derived support and rank stability metrics.
+
+### Reported metrics
+
+For each candidate, the module reports:
+
+- `original_score`: similarity score from the original query spectrum
+- `original_rank`: rank in the original top-N candidate list
+- `match_support`: fraction of bootstrap replicates with score above the support threshold
+- `score_mean`: mean bootstrap similarity score
+- `score_std`: standard deviation of bootstrap similarity scores
+- `top1_stability`: fraction of replicates in which the candidate ranks first
+- `top3_stability`: fraction of replicates in which the candidate ranks in the top 3
+- `top5_stability`: fraction of replicates in which the candidate ranks in the top 5
+- `mean_rank`: mean rank across bootstrap replicates
+- `distinct_top_hit_frequency`: fraction of replicates in which the candidate is the top hit
+
+These metrics allow candidates to be interpreted as robust, ambiguous or fragile matches rather than relying on score alone!
+
+### Main functions
+
+The library matching workflow is implemented in:
+
+- `specreboot/library/library_matching.py`
+
+The most important user-facing functions are:
+
+- `confidence_aware_match()` for one query spectrum
+- `save_results()` for exporting one query result
+- `collect_results()` for aggregating results across many queries
+
+### Example usage
+
+```python
+from matchms.similarity import ModifiedCosine
+from specreboot.library.library_matching import confidence_aware_match
+
+result = confidence_aware_match(
+    query_spectrum=query_spectrum,
+    library_spectra=library_spectra,
+    similarity_metric=ModifiedCosine(),
+    B=50,
+    top_n=50,
+    score_threshold=0.7,
+    decimals=2,
+    seed=42,
+)
+print(result.candidate_stats.head())
+```
+
 ## Attribution
 ### License
 
