@@ -26,64 +26,65 @@ def _validate_matrix_pair(df_a: pd.DataFrame, df_b: pd.DataFrame) -> None:
 # Component filtering
 # ----------------------------------------------------------------------
 
-def _prune_component_edges(
-    graph: nx.Graph,
-    component_nodes,
-    cosine_delta: float
-) -> None:
+
+def _filter_components(edge_mask: np.array, u_nodes: np.array, v_nodes: np.array, similarity_array: np.matrix, max_component_size: int, cosine_delta: float, retire_groups: bool) -> np.array:
+    """"
+    creates a mask that removes edges that would cause clusters to grow too big
     """
-    Remove the lowest-weight edges within a component until it shrinks.
-    """
-    # Extract all edges inside this component
-    sub_edges = graph.subgraph(component_nodes).edges(data=True)
 
-    # Sort by edge weight (mean_similarity)
-    sorted_edges = sorted(sub_edges, key=lambda e: e[2].get("weight", 0.0))
+    retired_groups = set()
+    
+    nr_of_nodes = max(np.max(u_nodes), np.max(v_nodes)) + 1
+    node_groups = np.array(range(nr_of_nodes))  # lookup
+    group_sizes = np.ones(nr_of_nodes) 
 
-    if not sorted_edges:
-        return
+    similarity_array = similarity_array.copy()  # make a copy to modify
+    similarity_array[edge_mask == 0] = 0  # remove all values that have no edges
 
-    # Remove the weakest edge
-    weakest_edge = sorted_edges[0]
-    u, v = weakest_edge[0], weakest_edge[1]
-    graph.remove_edge(u, v)
+    indices = np.argsort(similarity_array)[::-1]  # indices of numbers from high to low
+
+    mask = np.zeros_like(similarity_array)
+
+    for i in indices:
+        strength = similarity_array[i]
+        u, v = u_nodes[i], v_nodes[i]
+
+        if strength == 0:  # encountering a strength of 0 means we're not going to add any more edges on the remaining data, so we can end the process (remember we sorted them by size)
+            break
+
+        u_group = node_groups[u]  # look up the group of u
+        v_group = node_groups[v]  # look up the group of v
+
+        if retire_groups and any(g in retired_groups for g in [u_group, v_group]):  # if we turned on this setting, we don't touch the retired groups (matches behaviour of original breakup implementation)
+            retired_groups.add(u_group)
+            retired_groups.add(v_group)  # we need to make sure BOTH groups are retired after a failed connection
+            continue
+
+        if u_group == v_group:  # if they're already in the same cluster, the cluster won't grow in size
+            mask[i] = 1
+            continue
+
+        u_group_size = group_sizes[u_group]  # get the size of group u
+        v_group_size = group_sizes[v_group]  # get the size of group v
+
+        group_sum = u_group_size + v_group_size
+        if group_sum > max_component_size:  # adding these clusters would exceed the max size
+            retired_groups.add(u_group)
+            retired_groups.add(v_group)
+            continue
+
+        # if we get here, we're allowed to add the clusters
+        mask[i] = 1
+
+        # we need to update our group administration
+        dominant_group, purged_group = sorted((u_group, v_group))  # determine which group will take over the members of the other (lowest group nr is dominant)
+
+        node_groups[node_groups == purged_group] = dominant_group
+        group_sizes[dominant_group] = group_sum
+        group_sizes[purged_group] = 0
 
 
-def _filter_components(
-    graph: nx.Graph,
-    max_component_size: int,
-    cosine_delta: float
-) -> None:
-    """
-    Iteratively prune oversized components by removing weakest edges.
-
-    Parameters
-    ----------
-    graph : nx.Graph
-        The network to be filtered.
-    max_component_size : int
-        Maximum allowed connected component size (0 = disabled).
-    cosine_delta : float
-        Placeholder for future logic; currently not used directly.
-    """
-    if max_component_size == 0:
-        return
-
-    oversized_exists = True
-
-    while oversized_exists:
-        oversized_exists = False
-        components = list(nx.connected_components(graph))
-
-        for comp in components:
-            if len(comp) > max_component_size:
-                _prune_component_edges(graph, comp, cosine_delta)
-                oversized_exists = True
-
-    # Assign component ID numbers
-    for cid, comp in enumerate(nx.connected_components(graph)):
-        for node in comp:
-            graph.nodes[node]["component"] = cid
+    return mask.astype(bool)
 
 
 def build_base_graph(
@@ -113,15 +114,17 @@ def build_base_graph(
     sup_vals = sup[i_idx, j_idx]
 
     mask = sim_vals >= sim_threshold
+    
+    # Only filter if parameter is provided
+    if max_component_size is not None:
+        mask &= _filter_components(mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta, retire_groups=True)
+
     edges = [
         (scan_ids[i], scan_ids[j], {"weight": float(s), "bootstrap_support": float(p)})
         for i, j, s, p in zip(i_idx[mask], j_idx[mask], sim_vals[mask], sup_vals[mask])
     ]
     G.add_edges_from(edges)
-
-    # Only filter if parameter is provided
-    if max_component_size is not None:
-        _filter_components(G, max_component_size, cosine_delta)
+    _assign_cluster_ids(G)
 
     nx.write_graphml(G, output_file)
     return G
@@ -158,14 +161,16 @@ def build_thresh_graph(
     sup_vals = sup[i_idx, j_idx]
 
     mask = (sim_vals >= sim_threshold) & (sup_vals >= support_threshold)
+
+    if max_component_size is not None:
+        mask &= _filter_components(mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta, retire_groups=True)
+
     edges = [
         (scan_ids[i], scan_ids[j], {"weight": float(s), "bootstrap_support": float(p)})
         for i, j, s, p in zip(i_idx[mask], j_idx[mask], sim_vals[mask], sup_vals[mask])
     ]
     G.add_edges_from(edges)
-
-    if max_component_size is not None:
-        _filter_components(G, max_component_size, cosine_delta)
+    _assign_cluster_ids(G)
 
     nx.write_graphml(G, output_file)
     return G
@@ -207,6 +212,9 @@ def build_core_rescue_graph(
     rescue_mask = (sim_vals >= sim_rescue_min)  & (sim_vals < sim_core) & (sup_vals >= support_rescue)
     either_mask = core_mask | rescue_mask
 
+    if max_component_size is not None:
+        either_mask &= _filter_components(either_mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta, retire_groups=True)
+
     labels = np.where(core_mask[either_mask], "core", "rescued").astype(str).astype(str)
 
     edges = [
@@ -214,9 +222,16 @@ def build_core_rescue_graph(
         for i, j, s, p, lab in zip(i_idx[either_mask], j_idx[either_mask], sim_vals[either_mask], sup_vals[either_mask], labels)
     ]
     G.add_edges_from(edges)
-
-    if max_component_size is not None:
-        _filter_components(G, max_component_size, cosine_delta)
+    _assign_cluster_ids(G)
 
     nx.write_graphml(G, output_file)
     return G
+
+
+def _assign_cluster_ids(graph):
+    all_nodes = list(nx.connected_components(graph))
+    sorted_nodes = sorted(all_nodes, key=len, reverse=True)  # largest cluster has id 0
+
+    for cid, comp in enumerate(sorted_nodes):
+        for node in comp:
+            graph.nodes[node]["component"] = cid
