@@ -68,9 +68,7 @@ def get_spectrum_id(spectrum: Spectrum, fallback_prefix: str = "spec") -> str:
     ``spectrum_id`` and ``feature_id``) are identified by their unique
     ``spectrum_id`` (e.g. ``CCMSLIB00000079350``) rather than the generic
     ``feature_id`` field (which is often ``'0'`` for every spectrum in a GNPS
-    MGF export and is therefore not unique).  Query spectra produced by
-    feature-finding tools typically lack a ``spectrum_id``, so ``feature_id``
-    and ``scans`` serve as fallbacks for those.
+    MGF export and is therefore not unique).
     """
     md = spectrum.metadata or {}
     for key in ("spectrum_id", "feature_id", "id", "scans"):
@@ -173,6 +171,86 @@ def compute_rank_stability_flags(
         return 0, 0, 0, len(ranked_candidate_ids) + 1
     rank = ranked_candidate_ids.index(candidate_id) + 1
     return int(rank <= 1), int(rank <= 3), int(rank <= 5), rank
+
+
+# -----------------------------------------------------------------------------
+# Precursor m/z filter
+# -----------------------------------------------------------------------------
+
+def filter_by_precursor_mz(
+    query_spectrum: Spectrum,
+    library_spectra: Sequence[Spectrum],
+    tolerance_da: float = 0.02,
+) -> list[Spectrum]:
+    """
+    Return library spectra whose precursor m/z is within ``tolerance_da``
+    Daltons of the query precursor m/z.
+
+    This mirrors the **Parent Mass Tolerance** parameter in GNPS library
+    matching (GNPS default: 2.0 Da).  A single Da-based window is used
+    rather than a ppm window because it is instrument-agnostic and
+    consistent with how public spectral libraries report precursor m/z.
+
+    Recommended values by instrument type:
+
+    - QTOF / Orbitrap (high-resolution, calibrated data): 0.01-0.05 Da
+    - Ion trap / triple quadrupole (low-resolution): 0.3-2.0 Da
+    - Mixed instrument libraries or unknown instrument: 2.0 Da (GNPS default)
+
+    If the query spectrum has no ``precursor_mz`` metadata field, all library
+    spectra are returned unchanged so that matching can still proceed.
+    Library spectra without a ``precursor_mz`` field are excluded when a
+    query precursor m/z is available.  If the filter removes all candidates,
+    the full library is returned with a warning.
+
+    Parameters
+    ----------
+    query_spectrum:
+        The query spectrum.
+    library_spectra:
+        All library spectra to filter.
+    tolerance_da:
+        Precursor m/z tolerance in Daltons (default 0.02 Da).
+
+    Returns
+    -------
+    Filtered list of library spectra.
+
+    Examples
+    --------
+    ::
+
+        # High-resolution QTOF/Orbitrap data
+        filtered = filter_by_precursor_mz(query, library, tolerance_da=0.02)
+
+        # Mixed instrument library (GNPS-style)
+        filtered = filter_by_precursor_mz(query, library, tolerance_da=2.0)
+    """
+    query_pmz = query_spectrum.metadata.get("precursor_mz")
+    if query_pmz is None:
+        return list(library_spectra)
+
+    query_pmz = float(query_pmz)
+
+    filtered = [
+        s for s in library_spectra
+        if s.metadata.get("precursor_mz") is not None
+        and abs(float(s.metadata["precursor_mz"]) - query_pmz) <= tolerance_da
+    ]
+
+    if not filtered:
+        import warnings
+        warnings.warn(
+            f"Precursor m/z filter removed all library candidates for query "
+            f"precursor_mz={query_pmz:.4f} Da (tolerance={tolerance_da} Da). "
+            f"Falling back to unfiltered library. Consider increasing "
+            f"precursor_mz_tolerance_da.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return list(library_spectra)
+
+    return filtered
 
 
 # -----------------------------------------------------------------------------
@@ -316,6 +394,7 @@ def confidence_aware_match(
     score_threshold: float = 0.7,
     decimals: int = 2,
     seed: int = 42,
+    precursor_mz_tolerance_da: float = 0.02,
 ) -> ConfidenceAwareResult:
     """
     Confidence-aware library matching with SpecReBoot-style bootstrapping.
@@ -334,8 +413,9 @@ def confidence_aware_match(
 
     Workflow
     --------
-    1. Score the original query against the full library with
-       ``calculate_scores``.
+    0. Filter the library to spectra within ``precursor_mz_tolerance_da`` of
+       the query precursor m/z (mirrors GNPS **Parent Mass Tolerance**).
+    1. Score the filtered library with ``calculate_scores``.
     2. Restrict to the top-N candidates; build an ``id_to_spectrum`` mapping
        for direct metadata access in reporting.
     3. Build global bins from the query spectrum only.
@@ -364,6 +444,12 @@ def confidence_aware_match(
         (default 2, i.e. 0.01 Da bins).
     seed:
         Base random seed; replicate ``b`` uses ``seed + b``.
+    precursor_mz_tolerance_da:
+        Precursor m/z filter window in Daltons, applied before fragment
+        scoring (default 0.02 Da).  Mirrors the GNPS **Parent Mass
+        Tolerance** parameter (GNPS default 2.0 Da).  Recommended values:
+        0.01-0.05 Da for QTOF/Orbitrap, 0.3-2.0 Da for ion trap data, or
+        2.0 Da for mixed-instrument libraries.
 
     Returns
     -------
@@ -377,10 +463,20 @@ def confidence_aware_match(
             "Check preprocessing output."
         )
 
+    # Step 0: filter library by precursor m/z before fragment scoring.
+    # Mirrors GNPS Parent Mass Tolerance — reduces the search space to
+    # spectra that could plausibly be the same compound and avoids high
+    # cosine scores driven by shared common fragments across molecules.
+    library_spectra_filtered = filter_by_precursor_mz(
+        query_spectrum,
+        library_spectra,
+        tolerance_da=precursor_mz_tolerance_da,
+    )
+
     # Step 1–2: initial full-library search, restrict to top-N candidates
-    ranked_matches = score_candidates(query_spectrum, library_spectra, similarity_metric)
+    ranked_matches = score_candidates(query_spectrum, library_spectra_filtered, similarity_metric)
     top_matches, restricted_library = restrict_library_to_top_n(
-        ranked_matches, library_spectra, top_n
+        ranked_matches, library_spectra_filtered, top_n
     )
 
     if not top_matches:
