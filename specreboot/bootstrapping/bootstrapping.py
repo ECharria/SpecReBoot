@@ -166,7 +166,7 @@ def calculate_bootstrapping(
 
     if return_label_map:
         return df_mean_sim, df_edge_sup, label_info["label_map"]
-    return df_mean_sim, df_edge_sup
+    return df_mean_sim, df_edge_sup, history
 
 
 
