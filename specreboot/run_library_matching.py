@@ -57,6 +57,8 @@ for query in query_spectra:
             score_threshold=0.7,
             decimals=2,
             seed=42,
+            precursor_mz_tolerance_da=0.02,
+            analog_search=True,
         )
         results.append(result)
         print(f"{result.query_id}: {summarize_top_annotation(result)}")
