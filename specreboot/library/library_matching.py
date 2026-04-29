@@ -22,6 +22,7 @@ class CandidateMatch:
     candidate_id: str
     original_score: float
     original_rank: int
+    is_analog: bool = False  # True when matched by analog search (no precursor m/z match)
 
 
 @dataclass
@@ -31,6 +32,7 @@ class BootstrapCandidateStats:
     candidate_id: str
     original_score: float
     original_rank: int
+    is_analog: bool
     match_support: float
     score_mean: float
     score_std: float
@@ -395,6 +397,7 @@ def confidence_aware_match(
     decimals: int = 2,
     seed: int = 42,
     precursor_mz_tolerance_da: float = 0.02,
+    analog_search: bool = True,
 ) -> ConfidenceAwareResult:
     """
     Confidence-aware library matching with SpecReBoot-style bootstrapping.
@@ -416,6 +419,10 @@ def confidence_aware_match(
     0. Filter the library to spectra within ``precursor_mz_tolerance_da`` of
        the query precursor m/z (mirrors GNPS **Parent Mass Tolerance**).
     1. Score the filtered library with ``calculate_scores``.
+    1b. If ``analog_search=True`` and the precursor filter returned fewer than
+        ``top_n`` candidates, score the complementary (non-matching) library
+        spectra and fill remaining slots with the highest-scoring analogs.
+        Analog candidates are flagged with ``is_analog=True`` in the output.
     2. Restrict to the top-N candidates; build an ``id_to_spectrum`` mapping
        for direct metadata access in reporting.
     3. Build global bins from the query spectrum only.
@@ -450,6 +457,14 @@ def confidence_aware_match(
         Tolerance** parameter (GNPS default 2.0 Da).  Recommended values:
         0.01-0.05 Da for QTOF/Orbitrap, 0.3-2.0 Da for ion trap data, or
         2.0 Da for mixed-instrument libraries.
+    analog_search:
+        If ``True`` (default) and the precursor m/z filter yields fewer than
+        ``top_n`` candidates, the remaining slots are filled with the
+        highest-scoring spectra from the rest of the library (analog
+        matches).  Analog candidates are ranked after exact precursor matches
+        and marked with ``is_analog=True`` in the output.  Set to ``False``
+        to restrict results strictly to spectra within the precursor m/z
+        window.
 
     Returns
     -------
@@ -467,23 +482,54 @@ def confidence_aware_match(
     # Mirrors GNPS Parent Mass Tolerance — reduces the search space to
     # spectra that could plausibly be the same compound and avoids high
     # cosine scores driven by shared common fragments across molecules.
-    library_spectra_filtered = filter_by_precursor_mz(
+    library_filtered = filter_by_precursor_mz(
         query_spectrum,
         library_spectra,
         tolerance_da=precursor_mz_tolerance_da,
     )
 
-    # Step 1–2: initial full-library search, restrict to top-N candidates
-    ranked_matches = score_candidates(query_spectrum, library_spectra_filtered, similarity_metric)
-    top_matches, restricted_library = restrict_library_to_top_n(
-        ranked_matches, library_spectra_filtered, top_n
-    )
+    # Step 1: score precursor-matched (exact) candidates.
+    filtered_ranked = score_candidates(query_spectrum, library_filtered, similarity_metric)
+    exact_top = filtered_ranked[:top_n]
+
+    # Step 1b: analog fill-up — if fewer than top_n exact candidates were
+    # found, supplement with the highest-scoring spectra from the rest of
+    # the library (those outside the precursor m/z window).
+    analog_matches: list[CandidateMatch] = []
+    if analog_search:
+        n_needed = top_n - len(exact_top)
+        if n_needed > 0:
+            filtered_ids = {get_spectrum_id(s, fallback_prefix="lib") for s in library_filtered}
+            library_analog = [
+                s for s in library_spectra
+                if get_spectrum_id(s, fallback_prefix="lib") not in filtered_ids
+            ]
+            if library_analog:
+                analog_full = score_candidates(query_spectrum, library_analog, similarity_metric)
+                for m in analog_full[:n_needed]:
+                    m.is_analog = True
+                analog_matches = analog_full[:n_needed]
+
+    # Combine: exact precursor matches first, then analogs fill remaining slots.
+    all_top = exact_top + analog_matches
+    # Re-assign original_rank to reflect position in the combined list.
+    for i, m in enumerate(all_top):
+        m.original_rank = i + 1
+
+    top_matches = all_top
 
     if not top_matches:
         raise ValueError(
             f"No library candidates were recovered for query {query_id}. "
             "The spectrum may have no peaks in common with the library."
         )
+
+    # Build restricted library from both filtered and analog spectra.
+    top_ids = {m.candidate_id for m in top_matches}
+    restricted_library = [
+        s for s in library_spectra
+        if get_spectrum_id(s, fallback_prefix="lib") in top_ids
+    ]
 
     top_candidate = top_matches[0]
     candidate_ids = [m.candidate_id for m in top_matches]
@@ -575,6 +621,7 @@ def confidence_aware_match(
             candidate_id=cid,
             original_score=match.original_score,
             original_rank=match.original_rank,
+            is_analog=match.is_analog,
             match_support=float(support.mean()),
             score_mean=float(scores.mean()),
             score_std=float(scores.std(ddof=1)) if len(scores) > 1 else 0.0,
@@ -677,6 +724,7 @@ def _build_top_n_df(
             "query_id":          result.query_id,
             "rank":              rank,
             "candidate_id":      cid,
+            "is_analog":         stats_row.get("is_analog", False),
             # metadata read straight from spectrum.metadata
             "name":              md.get("compound_name") or md.get("name"),
             "smiles":            md.get("smiles"),
