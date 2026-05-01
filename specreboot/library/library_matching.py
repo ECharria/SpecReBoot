@@ -488,15 +488,32 @@ def confidence_aware_match(
         tolerance_da=precursor_mz_tolerance_da,
     )
 
+    # Detect whether the precursor filter was genuinely applied or fell back to
+    # the full library (happens when the query has no precursor_mz, or when no
+    # library spectrum is within the tolerance window).  In the fallback case
+    # all candidates are effectively analogs — they share no precursor mass with
+    # the query — so they are marked is_analog=True.
+    query_pmz = query_spectrum.metadata.get("precursor_mz")
+    precursor_filter_applied = (
+        query_pmz is not None
+        and len(library_filtered) < len(library_spectra)
+    )
+
     # Step 1: score precursor-matched (exact) candidates.
     filtered_ranked = score_candidates(query_spectrum, library_filtered, similarity_metric)
     exact_top = filtered_ranked[:top_n]
+
+    # If the filter fell back, flag every candidate from the full-library search
+    # as an analog — none of them share the query precursor mass.
+    if not precursor_filter_applied:
+        for m in exact_top:
+            m.is_analog = True
 
     # Step 1b: analog fill-up — if fewer than top_n exact candidates were
     # found, supplement with the highest-scoring spectra from the rest of
     # the library (those outside the precursor m/z window).
     analog_matches: list[CandidateMatch] = []
-    if analog_search:
+    if analog_search and precursor_filter_applied:
         n_needed = top_n - len(exact_top)
         if n_needed > 0:
             filtered_ids = {get_spectrum_id(s, fallback_prefix="lib") for s in library_filtered}
