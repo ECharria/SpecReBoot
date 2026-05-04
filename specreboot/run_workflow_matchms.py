@@ -208,6 +208,15 @@ def build_parser(p: argparse.ArgumentParser):
                 "Store sampled and missing bins for each bootstrap replicate (slower)."
             ),
     )
+    p.add_argument(
+            "--save-matrices",
+            action=argparse.BooleanOptionalAction,
+            default=True,
+            help=(
+                "Save df_mean_similarity and df_edge_support as CSV files. "
+                "Use --no-save-matrices to skip (recommended for large datasets >20k spectra)."
+            ),
+    )
 
 def _resolve_and_validate_similarities(args) -> list[str]:
     sims = list(args.similarities)
@@ -246,8 +255,9 @@ def calculate_similarities(binned_spectra, bins, model_name: str, similarity, ar
     )
 
     df_mean_sim, df_edge_sup, history = result
-    df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv")
-    df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv")
+    if args.save_matrices:
+        df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv")
+        df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv")
     return df_mean_sim, df_edge_sup, history
 
 
@@ -285,10 +295,14 @@ def run(args):
     args.outdir.mkdir(parents=True, exist_ok=True)
 
     # --- Load and clean spectra ---
-    spectra = load_from_mgf(str(args.mgf))
-    cleaned_name = args.cleaned_mgf or str(args.outdir / f"{args.mgf.stem}_cleaned.mgf")
-    spectra_cleaned, report = general_cleaning(spectra, file_name=cleaned_name)
-    print(report)
+    spectra = list(load_from_mgf(str(args.mgf)))
+    cleaned_path = Path(args.cleaned_mgf or args.outdir / f"{args.mgf.stem}_cleaned.mgf")
+    if cleaned_path.exists():
+        spectra_cleaned = list(load_from_mgf(str(cleaned_path)))
+        print(f"Loaded {len(spectra_cleaned)} pre-cleaned spectra from {cleaned_path}")
+    else:
+        spectra_cleaned, report = general_cleaning(spectra, file_name=str(cleaned_path))
+        print(report)
 
     # --- Bin spectra for bootstrapping ---
     bins = make_global_bins(spectra_cleaned, args.decimals)
