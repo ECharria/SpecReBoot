@@ -194,6 +194,15 @@ def build_parser(p: argparse.ArgumentParser):
             "(prevents giant hairballs)."
         ),
     )
+    p.add_argument(
+        "--save-matrices",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Save df_mean_similarity and df_edge_support as CSV files. "
+            "Use --no-save-matrices to skip (recommended for large datasets >20k spectra)."
+        ),
+    )
 
 
 def _make_similarity(args):
@@ -250,8 +259,9 @@ def run(args):
     df_mean_sim, df_edge_sup, label_map = result
 
     # --- Export similarity, support, and label-map outputs ---
-    df_mean_sim.to_csv(args.outdir / f"{args.prefix}_bootstrap_mean_similarity.csv", index=False)
-    df_edge_sup.to_csv(args.outdir / f"{args.prefix}_bootstrap_edge_support.csv", index=False)
+    if args.save_matrices:
+        df_mean_sim.to_csv(args.outdir / f"{args.prefix}_bootstrap_mean_similarity.csv", index=False)
+        df_edge_sup.to_csv(args.outdir / f"{args.prefix}_bootstrap_edge_support.csv", index=False)
     label_map.to_csv(args.outdir / f"{args.prefix}_label_map.csv", index=False)
 
     # --- Map bootstrap labels back to GNPS node identifiers and add edges to the GNPS graph ---

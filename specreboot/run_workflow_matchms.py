@@ -208,6 +208,15 @@ def build_parser(p: argparse.ArgumentParser):
                 "Store sampled and missing bins for each bootstrap replicate (slower)."
             ),
     )
+    p.add_argument(
+            "--save-matrices",
+            action=argparse.BooleanOptionalAction,
+            default=True,
+            help=(
+                "Save df_mean_similarity and df_edge_support as CSV files. "
+                "Use --no-save-matrices to skip (recommended for large datasets >20k spectra)."
+            ),
+    )
 
 def _resolve_and_validate_similarities(args) -> list[str]:
     sims = list(args.similarities)
@@ -246,8 +255,9 @@ def calculate_similarities(binned_spectra, bins, model_name: str, similarity, ar
     )
 
     df_mean_sim, df_edge_sup, history = result
-    df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv")
-    df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv")
+    if args.save_matrices:
+        df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv")
+        df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv")
     return df_mean_sim, df_edge_sup, history
 
 
