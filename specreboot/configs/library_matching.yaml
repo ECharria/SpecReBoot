@@ -10,12 +10,11 @@ precursor_tolerance: 0.02
 analog_search: true
 top_n: 100
 B: 100
-similarity_type: ms2ds
+similarity_type: cos
 score_threshold: 0.7
-flash_tolerance: 0.01
+cosine_tolerance: 0.01
 
 binning_decimals: 2
-seed: 42
 
 ms2deepscore_model_path: null # optional
 spec2vec_model_path: null # optional
