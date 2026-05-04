@@ -217,9 +217,13 @@ def run(args):
     
     # --- Load and clean spectra ---
     spectra = list(load_from_mgf(str(args.mgf)))
-    cleaned_name = args.cleaned_mgf or str(args.outdir / f"{args.mgf.stem}_cleaned.mgf")
-    spectra_cleaned, report = spectra_harmonization(spectra, file_name=cleaned_name)
-    print(report)
+    cleaned_path = Path(args.cleaned_mgf or args.outdir / f"{args.mgf.stem}_cleaned.mgf")
+    if cleaned_path.exists():
+        spectra_cleaned = list(load_from_mgf(str(cleaned_path)))
+        print(f"Loaded {len(spectra_cleaned)} pre-cleaned spectra from {cleaned_path}")
+    else:
+        spectra_cleaned, report = spectra_harmonization(spectra, file_name=str(cleaned_path))
+        print(report)
 
     # --- Bin spectra for bootstrapping ---
     bins = make_global_bins(spectra_cleaned, args.decimals)
