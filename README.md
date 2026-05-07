@@ -211,6 +211,7 @@ Example — multiple selected metrics:
 | `--return-history` | flag | Store cumulative bootstrap history (slower, more memory) |
 | `--track-bins` | flag | Store sampled/missing bins per replicate (slower) |
 | `--sim-rescue-min` | `1e-5` | Minimum similarity floor for rescued edges |
+| `--save-matrices` | `True` | Save mean similarity and edge support as CSV files. Use `--no-save-matrices` to skip (recommended for large datasets >20k spectra) |
 
 ---
 
@@ -240,7 +241,7 @@ specreboot gnps \
   --candidate-node-attrs "shared name" \
   --sim-threshold 0.7 \
   --support-threshold 0.5 \
-  --sim-rescue-min 1e-5 \
+  --sim-rescue-min 1e-5
 ```
 
 #### Key gnps arguments
@@ -260,6 +261,7 @@ specreboot gnps \
 | `--candidate-node-attrs` | `shared name` | GNPS node attribute(s) used to map bootstrap IDs to GNPS nodes |
 | `--label-mode` | `feature` | Node label source: `feature`, `scan`, or `internal` |
 | `--max-component-size` | `100` | Maximum connected-component size |
+| `--save-matrices` | `True` | Save mean similarity and edge support as CSV files. Use `--no-save-matrices` to skip (recommended for large datasets >20k spectra) |
 
 ---
 
