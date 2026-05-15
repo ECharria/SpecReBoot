@@ -64,7 +64,10 @@ def calculate_bootstrapping(
     """
     total_start = time.perf_counter()
 
-    # NOTE: due to floating point arithmatic, the resulting values in the cosine similarity matrix might differ with the orignal function with around <1e-7. 
+    if B > np.iinfo(np.uint16).max:
+        raise ValueError(f"B={B} exceeds uint16 max ({np.iinfo(np.uint16).max}); reduce B or change the dtype of total_pair_counts / total_edge_support.")
+
+    # NOTE: due to floating point arithmatic, the resulting values in the cosine similarity matrix might differ with the orignal function with around <1e-7.
     history = {}
 
     # The similarity implementation expects a NumPy array of global bins.
@@ -77,8 +80,8 @@ def calculate_bootstrapping(
 
     # Accumulate results across all bootstrap replicates.
     total_pair_similarities = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the sum of all similarities of each pair combination
-    total_pair_counts       = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the nr of times a given pair is used in the bootstrapping
-    total_edge_support      = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the nr of times a given pair are each others closest k neighbours
+    total_pair_counts       = np.zeros((dataset_size, dataset_size), dtype=np.uint16)  # matrix with the nr of times a given pair is used in the bootstrapping
+    total_edge_support      = np.zeros((dataset_size, dataset_size), dtype=np.uint16)  # matrix with the nr of times a given pair are each others closest k neighbours
 
     bootstrap_ids = list(range(B))
     batches = [bootstrap_ids[i:i + batch_size] for i in range(0, B, batch_size)]
@@ -216,8 +219,8 @@ def bootstrap_batch(
 
     # Accumulate results across the bootstrap replicates in this batch.
     total_pair_similarities = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the sum of all similarities of each pair combination
-    total_pair_counts       = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the nr of times a given pair is used in the bootstrapping
-    total_edge_support      = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the nr of times a given pair are each others closest k neighbours
+    total_pair_counts       = np.zeros((dataset_size, dataset_size), dtype=np.uint16)  # matrix with the nr of times a given pair is used in the bootstrapping
+    total_edge_support      = np.zeros((dataset_size, dataset_size), dtype=np.uint16)  # matrix with the nr of times a given pair are each others closest k neighbours
 
     history = []
 
@@ -231,8 +234,8 @@ def bootstrap_batch(
         top_k_nearest_neighbours = mutual_topk(pair_similarity_matrix, k)
 
         # Get the position of the pairs that we used in this iteration
-        pair_counts  = (pair_similarity_matrix != 0).astype(int)
-        edge_support = (top_k_nearest_neighbours != 0).astype(int)
+        pair_counts  = (pair_similarity_matrix != 0).astype(np.uint8)
+        edge_support = (top_k_nearest_neighbours != 0).astype(np.uint8)
 
         # Add the results if this iteration
         total_pair_similarities += pair_similarity_matrix
@@ -285,8 +288,8 @@ def _reconstruct_history(dataset_size, all_history):
     history_edge_sup = []
 
     current_pair_similarities = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the sum of all similarities of each pair combination
-    current_pair_counts       = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the nr of times a given pair is used in the bootstrapping
-    current_edge_support      = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the nr of times a given pair are each others closest k neighbours
+    current_pair_counts       = np.zeros((dataset_size, dataset_size), dtype=np.uint16)  # matrix with the nr of times a given pair is used in the bootstrapping
+    current_edge_support      = np.zeros((dataset_size, dataset_size), dtype=np.uint16)  # matrix with the nr of times a given pair are each others closest k neighbours
 
     for b, history in enumerate(sorted(all_history, key=lambda x: x["b"])):
         current_pair_similarities += history["pair_sim_sum"]
@@ -408,7 +411,7 @@ def mutual_topk(A: np.ndarray, k: int) -> np.ndarray:
 
     mutual_mask = row_mask & row_mask.T  # Only a value that is in *mutual* top k neighbors kept
 
-    result = np.zeros_like(A)  
+    result = np.zeros_like(A, dtype=np.uint8)
     result[mutual_mask] = 1  # sets all the mutual top k neighbors to 1
     return result
 
