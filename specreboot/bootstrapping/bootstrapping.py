@@ -64,7 +64,10 @@ def calculate_bootstrapping(
     """
     total_start = time.perf_counter()
 
-    # NOTE: due to floating point arithmatic, the resulting values in the cosine similarity matrix might differ with the orignal function with around <1e-7. 
+    if B > np.iinfo(np.uint16).max:
+        raise ValueError(f"B={B} exceeds uint16 max ({np.iinfo(np.uint16).max}); reduce B or change the dtype of total_pair_counts / total_edge_support.")
+
+    # NOTE: due to floating point arithmatic, the resulting values in the cosine similarity matrix might differ with the orignal function with around <1e-7.
     history = {}
 
     # The similarity implementation expects a NumPy array of global bins.
