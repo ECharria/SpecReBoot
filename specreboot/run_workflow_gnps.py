@@ -195,6 +195,26 @@ def build_parser(p: argparse.ArgumentParser):
         ),
     )
     p.add_argument(
+        "--max-links",
+        type=int,
+        default=None,
+        help=(
+            "Maximum number of edges per node. "
+            "Each node keeps only its top-max-links neighbours by similarity. "
+            "None (default) disables the filter."
+        ),
+    )
+    p.add_argument(
+        "--link-method",
+        default="mutual",
+        choices=["single", "mutual"],
+        help=(
+            "How to resolve the per-node degree cap when two nodes disagree.\n"
+            "  mutual (default): keep an edge only if both endpoints accept it.\n"
+            "  single: keep an edge if either endpoint accepts it."
+        ),
+    )
+    p.add_argument(
         "--save-matrices",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -288,6 +308,8 @@ def run(args):
         id_map=id_map,
         sim_threshold=args.sim_threshold,
         support_threshold=args.support_threshold,
+        max_links=args.max_links,
+        link_method=args.link_method,
         max_component_size=args.max_component_size,
         output_file=out_graph_thresh,
     )
@@ -302,6 +324,8 @@ def run(args):
         support_core=args.support_threshold,
         sim_rescue_min=args.sim_rescue_min,
         support_rescue=args.support_threshold,
+        max_links=args.max_links,
+        link_method=args.link_method,
         max_component_size=args.max_component_size,
         output_file=out_graph_rescued,
     )
