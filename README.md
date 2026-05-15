@@ -205,6 +205,8 @@ Example — multiple selected metrics:
 | `--sim-threshold-ms2dp` | `0.8` | Mean similarity threshold for MS2DeepScore graphs |
 | `--support-threshold` | `0.5` | Minimum edge support for threshold graph |
 | `--max-component-size` | `100` | Maximum connected-component size |
+| `--max-links` | `None` | Maximum edges per node; each node keeps only its top-N neighbours by mean similarity. `None` disables the filter |
+| `--link-method` | `mutual` | How to resolve the per-node degree cap: `mutual` keeps an edge only if both endpoints accept it; `single` keeps an edge if either endpoint accepts it |
 | `--tolerance` | `0.01` | Fragment m/z tolerance (Da) |
 | `--decimals` | `2` | Decimal places for m/z binning |
 | `--label-mode` | `feature` | Node label source: `feature`, `scan`, or `internal` |
@@ -261,6 +263,8 @@ specreboot gnps \
 | `--candidate-node-attrs` | `shared name` | GNPS node attribute(s) used to map bootstrap IDs to GNPS nodes |
 | `--label-mode` | `feature` | Node label source: `feature`, `scan`, or `internal` |
 | `--max-component-size` | `100` | Maximum connected-component size |
+| `--max-links` | `None` | Maximum edges per node; each node keeps only its top-N neighbours by mean similarity. `None` disables the filter |
+| `--link-method` | `mutual` | How to resolve the per-node degree cap: `mutual` keeps an edge only if both endpoints accept it; `single` keeps an edge if either endpoint accepts it |
 | `--save-matrices` | `True` | Save mean similarity and edge support as CSV files. Use `--no-save-matrices` to skip (recommended for large datasets >20k spectra) |
 
 ---
