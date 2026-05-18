@@ -177,6 +177,26 @@ def build_parser(p: argparse.ArgumentParser):
             ),
     )
     p.add_argument(
+            "--max-links",
+            type=int,
+            default=None,
+            help=(
+                "Maximum number of edges per node. "
+                "Each node keeps only its top-max-links neighbours by similarity. "
+                "None (default) disables the filter."
+            ),
+    )
+    p.add_argument(
+            "--link-method",
+            default="mutual",
+            choices=["single", "mutual"],
+            help=(
+                "How to resolve the per-node degree cap when two nodes disagree.\n"
+                "  mutual (default): keep an edge only if both endpoints accept it.\n"
+                "  single: keep an edge if either endpoint accepts it."
+            ),
+    )
+    p.add_argument(
             "--batch-size",
             type=int,
             default=10,
@@ -267,6 +287,8 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
     build_base_graph(
         df_mean_sim, df_edge_sup,
         sim_threshold=sim_threshold,
+        max_links=args.max_links,
+        link_method=args.link_method,
         max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_base_{similarity_score}.graphml"),
     )
@@ -274,8 +296,10 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
     build_thresh_graph(
         df_mean_sim, df_edge_sup,
         sim_threshold=sim_threshold,
-        max_component_size=args.max_component_size,
         support_threshold=args.support_threshold,
+        max_links=args.max_links,
+        link_method=args.link_method,
+        max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_threshold_{similarity_score}.graphml"),
     )
 
@@ -285,6 +309,8 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
         support_core=args.support_threshold,
         sim_rescue_min=args.sim_rescue_min,
         support_rescue=args.support_threshold,
+        max_links=args.max_links,
+        link_method=args.link_method,
         max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_rescued_{similarity_score}.graphml"),
     )
