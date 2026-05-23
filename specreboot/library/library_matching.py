@@ -879,3 +879,23 @@ def collect_results(
     all_candidate_stats.to_csv(outdir / f"{prefix}_all_candidate_stats.csv", index=False)
 
     return all_top_hits, all_candidate_stats
+
+
+def deduce_spectrum_adducts(spectra, metadata):
+    adducts = {}
+    for row_id, adduct in zip(metadata["row ID"], metadata["best ion"]):
+        adducts[row_id] = adduct
+
+    for spectrum in spectra:
+
+        spectrum_id = spectrum.get("feature_id")
+        if spectrum_id is None:
+            continue
+
+        adduct = adducts.get(spectrum_id)
+        if adduct is None:
+            continue
+
+        spectrum.set("adduct", adduct)
+
+

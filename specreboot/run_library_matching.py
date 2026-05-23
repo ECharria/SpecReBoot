@@ -18,8 +18,6 @@ SPEC2VEC_ALIASES        = ["s2v", "spec2vec"]
 
 ALL_ALIASES = COSINE_ALIASES + MODIFIED_COSINE_ALIASES + SPEC2VEC_ALIASES + MS2DEEPSCORE_ALIASES
 
-logger = logging.getLogger(__name__)
-
 
 def build_parser() -> ArgumentParser:
     parser = ArgumentParser()
@@ -39,7 +37,8 @@ def build_parser() -> ArgumentParser:
     parser.add_argument("--binning-decimals",           type=int,   help="precision of binning used for masking of spectral peaks")
     parser.add_argument("--ms2deepscore-model-path",    type=Path,  help="model path of ms2deepscore, only required when using ms2deepscore")
     parser.add_argument("--spec2vec-model-path",        type=Path,  help="model path of spec2vec, only required when using spec2vec")
-    parser.add_argument("--logger-level",               type=str,   help="set the logging level of logger", choices=["debug", "info", "warning", "error", "critical", "notset"], default="info")
+    parser.add_argument("--metadata-csv",               type=Path,  help="optional: csv with spectrum metadata from mz-mine containing adduct information")
+
     return parser
 
 
@@ -56,14 +55,22 @@ def collect_args(parser: ArgumentParser) -> Namespace:
     params = Namespace( **( vars(default_params) | vars(cli_params)))
 
     params.similarity_type = params.similarity_type.lower()
-    params.logger_level = params.logger_level.upper()
 
     return params
 
 
 def check_args(parser, params) -> None:
      # check if we have all required arguments
-    optional_args      = ["help", "library", "library_cleaned", "query", "query_cleaned", "ms2deepscore_model_path", "spec2vec_model_path"]
+    optional_args = [
+        "help", 
+        "library", 
+        "library_cleaned", 
+        "query", 
+        "query_cleaned", 
+        "ms2deepscore_model_path", 
+        "spec2vec_model_path", 
+        "metadata_csv"
+    ]
     required_arg_names = [action.dest for action in parser._actions if action.dest not in optional_args]
 
     missing_required_args = [arg_name for arg_name in required_arg_names if not hasattr(params, arg_name)]
@@ -94,19 +101,11 @@ def check_args(parser, params) -> None:
         assert hasattr(params, "ms2deepscore_model_path")   , f"ms2deepscore_model_path must be specified when library matching with {params.similarity_type}"
         assert Path(params.ms2deepscore_model_path).exists(), f"ms2deepscore_model_path must exist when library matching with {params.similarity_type}"
 
-    # configure logger
-    logger.setLevel(params.logger_level)
-    formatter = logging.Formatter("%(message)s")
-    handler = logging.StreamHandler()  # for console output
-    handler.setLevel(params.logger_level)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
     # print args for user verification
-    logger.info(msg="> running library matching with params:")
+    print("> running library matching with params:")
     for k, v in sorted(vars(params).items()):
-        logger.info(msg=f"    --{k:<35} {v}")
-    logger.info(msg="")
+        print(f"    --{k:<35} {v}")
+    print()
 
 
 # immediately collect the arguments before heavy imports to optimize cli interface response time, this makes it break early if something is specified wrongly
@@ -114,26 +113,36 @@ if __name__ == "__main__":
     main_parser = build_parser()
     main_params = collect_args(main_parser)
     check_args(main_parser, main_params)
-    logger.info(msg="> heavy imports...")
+    print("> heavy imports...")
 
 
 # heavy imports, this might take up to tens of seconds
+import pandas as pd
+
 from matchms.importing import load_from_mgf
+from matchms.exporting import save_as_mgf
 from matchms.similarity.FlashSimilarity import FlashSimilarity
 from specreboot.preprocessing.filtering import general_cleaning
-from specreboot.library.library_matching import confidence_aware_match, collect_results, get_spectrum_id, summarize_top_annotation
+from specreboot.library.library_matching import confidence_aware_match, collect_results, get_spectrum_id, summarize_top_annotation, deduce_spectrum_adducts
 
 
 def main(params: Namespace) -> None:
-    logger.info(msg="> running main process...")
+    print("> running main process...")
     query_spectra   = _clean_spectra(getattr(params, "query", None), getattr(params, "query_cleaned", None))
     library_spectra = _clean_spectra(getattr(params, "library", None), getattr(params, "library_cleaned", None))
+
+    if hasattr(params, "metadata_csv") and params.metadata_csv is not None:
+        metadata = pd.read_csv(params.metadata_csv)
+        deduce_spectrum_adducts(query_spectra, metadata)
+        save_as_mgf(query_spectra, str(params.query_cleaned))
+
 
     similarity_metric = _get_similarity(params.similarity_type, params.cosine_tolerance, getattr(params, "ms2deepscore_model_path", None), getattr(params, "spec2vec_model_path", None))
 
     results, skipped = [], []
 
-    for query in tqdm(query_spectra, disable=logger.getEffectiveLevel() > logging.INFO):
+    print("> running library matching...")
+    for query in tqdm(query_spectra):
         try:
             result = confidence_aware_match(
                 query_spectrum              = query,
@@ -148,20 +157,19 @@ def main(params: Namespace) -> None:
                 analog_search               = params.analog_search,
             )
             results.append(result)
-            logger.debug(msg=f"{result.query_id}: {summarize_top_annotation(result)}")
         except ValueError as e:
             query_id = get_spectrum_id(query)
-            logger.info(msg=f"Skipping {query_id}: {e}")
+            print(f"Skipping {query_id}: {e}")
             skipped.append(query_id)
 
     if not results:
-        logger.warning(msg="> WARNING: no results generated")
+        print("> WARNING: no results generated")
         return
     
     top_hits, all_stats = collect_results(results, outdir=params.outdir, prefix="test_cosine")
 
-    logger.info(msg=f"\n> Saved results to {params.outdir}")
-    logger.debug(msg=top_hits)
+    print(f"\n> Saved results to {params.outdir}")
+    print(top_hits)
 
 
 def _get_similarity(method_name: str, flash_tolerance: float, ms2deepscore_model_path: Path | None = None, spec2vec_model_path: Path | None = None):
@@ -189,20 +197,21 @@ def _get_similarity(method_name: str, flash_tolerance: float, ms2deepscore_model
 
 
 def _clean_spectra(input_path: Path | str, output_path: Path | str):
+    
     if Path(output_path).exists():
  
-        logger.info(f"> loading spectra from {output_path}...")
-        spectra = list(tqdm(load_from_mgf( str(output_path) ), disable=logger.getEffectiveLevel() > logging.INFO))
-        logger.info(f"> Loaded {len(spectra)} pre-cleaned spectra from {output_path}")
+        print(f"> loading spectra from {output_path}...")
+        spectra = list(tqdm(load_from_mgf( str(output_path) )))
+        print(f"> Loaded {len(spectra)} pre-cleaned spectra from {output_path}")
 
         return spectra
     
 
-    logger.info(msg=f"> cleaned file {output_path} does not exist, creating cleaned file from {input_path}...")
-    spectra = list(tqdm(load_from_mgf( str(input_path) ), disable=logger.getEffectiveLevel() > logging.INFO, desc=f"loading spectra from {input_path}"))
+    print(f"> cleaned file {output_path} does not exist, creating cleaned file from {input_path}...")
+    spectra = list(tqdm(load_from_mgf( str(input_path) ), desc=f"loading spectra from {input_path}"))
     cleaned_spectra, _report = general_cleaning(spectra, file_name=str(output_path))
 
-    logger.info(msg=f"> Cleaned and saved {len(spectra)} for {input_path} spectra to {output_path}")
+    print(f"> Cleaned and saved {len(spectra)} for {input_path} spectra to {output_path}")
     return cleaned_spectra
 
 
