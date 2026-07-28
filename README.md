@@ -289,9 +289,9 @@ If the run completes successfully, results will include:
 
 These outputs reproduce the RiPP case study discussed in the preprint and can be used as a reference for adapting SpecReBoot to your own datasets!
 
-## New - Confidence-aware library matching (Under development) 🚧
+## New - Query-focused library matching algorithm (Under development) 🚧
 
-In addition to the molecular networking, SpecReBoot now includes a library matching module for confidence-aware spectral annotation. This module applies the same core idea of bootstrap resampling to query–library matching, allowing library hits to be evaluated not only by their original score but also by their robustness to perturbation of the fragment evidence.
+In addition to the molecular networking, SpecReBoot now includes a library matching module for confidence-aware spectral matching. This module applies the same core idea of bootstrap resampling to spectral library matching, allowing candidate hits to be evaluated not only by their original score but also by quantifying the reproducibility of a match under perturbation of the fragment evidence of each query spectrum.
 
 ### Concept
 
@@ -322,9 +322,8 @@ For each candidate, the module reports:
 - `top3_stability`: fraction of replicates in which the candidate ranks in the top 3
 - `top5_stability`: fraction of replicates in which the candidate ranks in the top 5
 - `mean_rank`: mean rank across bootstrap replicates
-- `distinct_top_hit_frequency`: fraction of replicates in which the candidate is the top hit
 
-These metrics allow candidates to be interpreted as robust, ambiguous or fragile matches rather than relying on score alone!
+These metrics allow candidates to be interpreted as reliable, ambiguous or fragile matches rather than relying on score alone!
 
 ### Main functions
 
