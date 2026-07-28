@@ -291,7 +291,7 @@ These outputs reproduce the RiPP case study discussed in the preprint and can be
 
 ## New - Query-focused library matching algorithm (Under development) 🚧
 
-In addition to the molecular networking, SpecReBoot now includes a library matching module for confidence-aware spectral matching. This module applies the same core idea of bootstrap resampling to spectral library matching, allowing candidate hits to be evaluated not only by their original score but also by quantifying the reproducibility of a match under perturbation of the fragment evidence of each query spectrum.
+In addition to the molecular networking, SpecReBoot now includes a library matching module for confidence-aware spectral matching. This module applies the same core idea of bootstrap resampling to spectral library matching, allowing candidate hits to be evaluated not only by their original score but also by quantifying their reproducibility under perturbation of the underlying fragment evidence.
 
 ### Concept
 
