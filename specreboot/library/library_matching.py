@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Sequence
 
 import numpy as np
 import pandas as pd
@@ -40,7 +40,6 @@ class BootstrapCandidateStats:
     top3_stability: float
     top5_stability: float
     mean_rank: float
-    distinct_top_hit_frequency: float
 
 
 @dataclass
@@ -51,7 +50,6 @@ class ConfidenceAwareResult:
     top_candidate_id: str
     top_candidate_original_score: float
     candidate_stats: pd.DataFrame
-    top_hit_frequencies: pd.DataFrame
     # Maps candidate_id → the actual matched library Spectrum object so that
     # reporting helpers can read spectrum.metadata directly without a second
     # pass through the full library.
@@ -305,7 +303,7 @@ def _run_single_library_bootstrap(
 
     Returns
     -------
-    dict with keys ``b``, ``boot_scores``, ``top_hit``, ``supported``,
+    dict with keys ``b``, ``boot_scores``, ``supported``,
     ``top1``, ``top3``, ``top5``, ``rank``.
     """
     rng = np.random.default_rng(seed + b)
@@ -360,7 +358,6 @@ def _run_single_library_bootstrap(
         reverse=True,
     )
     ranked_ids = [cid for cid, _ in boot_scores]
-    top_hit = ranked_ids[0]
 
     supported, top1_rec, top3_rec, top5_rec, rank_rec = {}, {}, {}, {}, {}
     for cid, score in boot_scores:
@@ -374,7 +371,6 @@ def _run_single_library_bootstrap(
     return {
         "b": b,
         "boot_scores": boot_scores,
-        "top_hit": top_hit,
         "supported": supported,
         "top1": top1_rec,
         "top3": top3_rec,
@@ -597,7 +593,6 @@ def confidence_aware_match(
     top3_records:    dict[str, list[int]]   = {cid: [] for cid in candidate_ids}
     top5_records:    dict[str, list[int]]   = {cid: [] for cid in candidate_ids}
     rank_records:    dict[str, list[int]]   = {cid: [] for cid in candidate_ids}
-    bootstrap_top_hits: list[str] = []
 
     for b in range(B):
         res = _run_single_library_bootstrap(
@@ -611,7 +606,6 @@ def confidence_aware_match(
             score_threshold=score_threshold,
         )
 
-        bootstrap_top_hits.append(res["top_hit"])
 
         for cid, score in res["boot_scores"]:
             score_records[cid].append(score)
@@ -622,7 +616,6 @@ def confidence_aware_match(
             rank_records[cid].append(res["rank"][cid])
 
     # Step 6: summarise
-    top_hit_counts = pd.Series(bootstrap_top_hits).value_counts(normalize=True)
 
     stats_rows = []
     for match in top_matches:
@@ -646,7 +639,6 @@ def confidence_aware_match(
             top3_stability=float(top3s.mean()),
             top5_stability=float(top5s.mean()),
             mean_rank=float(ranks.mean()),
-            distinct_top_hit_frequency=float(top_hit_counts.get(cid, 0.0)),
         ))
 
     candidate_stats = pd.DataFrame([vars(row) for row in stats_rows])
@@ -655,20 +647,12 @@ def confidence_aware_match(
         ascending=[True, False, False],
     ).reset_index(drop=True)
 
-    top_hit_frequencies = (
-        pd.Series(bootstrap_top_hits)
-        .value_counts()
-        .rename_axis("candidate_id")
-        .reset_index(name="count")
-    )
-    top_hit_frequencies["frequency"] = top_hit_frequencies["count"] / B
 
     return ConfidenceAwareResult(
         query_id=query_id,
         top_candidate_id=top_candidate.candidate_id,
         top_candidate_original_score=top_candidate.original_score,
         candidate_stats=candidate_stats,
-        top_hit_frequencies=top_hit_frequencies,
         id_to_spectrum=id_to_spectrum,
     )
 
@@ -762,7 +746,6 @@ def _build_top_n_df(
             "top3_stability":             stats_row["top3_stability"],
             "top5_stability":             stats_row["top5_stability"],
             "mean_rank":                  stats_row["mean_rank"],
-            "distinct_top_hit_frequency": stats_row["distinct_top_hit_frequency"],
         })
 
     return pd.DataFrame(rows)
@@ -775,15 +758,13 @@ def save_results(
     top_n: int = 5,
 ) -> None:
     """
-    Save a ``ConfidenceAwareResult`` to CSV files.
+    Save a ``ConfidenceAwareResult`` to CSV file.
 
-    Writes two files:
+    Writes:
 
     - ``<prefix>_top_hits_<query_id>.csv`` — top-N candidates with bootstrap
       statistics and library metadata read directly from matched spectrum
       objects.
-    - ``<prefix>_top_hit_frequencies_<query_id>.csv`` — bootstrap top-hit
-      frequency table.
 
     Parameters
     ----------
@@ -804,9 +785,6 @@ def save_results(
     qid = result.query_id
     _build_top_n_df(result, top_n).to_csv(
         outdir / f"{prefix}_top_hits_{qid}.csv", index=False
-    )
-    result.top_hit_frequencies.to_csv(
-        outdir / f"{prefix}_top_hit_frequencies_{qid}.csv", index=False
     )
 
 
