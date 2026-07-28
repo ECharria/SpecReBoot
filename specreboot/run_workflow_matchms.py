@@ -254,7 +254,12 @@ def calculate_similarities(binned_spectra, bins, model_name: str, similarity, ar
         label_mode=args.label_mode,
     )
 
-    df_mean_sim, df_edge_sup, history = result
+    if len(result) == 3:
+        df_mean_sim, df_edge_sup, history = result
+    else:
+        df_mean_sim, df_edge_sup = result
+        history = None
+
     if args.save_matrices:
         df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv")
         df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv")
