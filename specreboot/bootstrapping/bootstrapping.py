@@ -7,6 +7,10 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import time
 
+AUTO_BATCH_FEATURE_THRESHOLD = 50_000  # from this nr of features on, the bootstraps are chunked to limit the memory usage
+LARGE_DATA_BATCH_SIZE        = 10  # nr of bootstraps per batch for those large datasets
+
+
 def calculate_bootstrapping(
     spectra_binned,
     global_bins,
@@ -14,7 +18,7 @@ def calculate_bootstrapping(
     k=5,
     similarity_metric=None,
     n_jobs=4,
-    batch_size=10,
+    batch_size=None,
     seed=42,
     return_history=False,
     track_bins=False,
@@ -36,10 +40,18 @@ def calculate_bootstrapping(
         Similarity object used to calculate pairwise similarities.
     n_jobs : int
         Number of workers used for parallel batch execution.
-    batch_size : int
-        Number of bootstrap replicates processed per batch.
+    batch_size : int or None
+        Number of bootstrap replicates processed per batch. This only limits the
+        peak memory usage for very large datasets (>= 50.000 features) and does not
+        change the result, because each replicate is seeded on its own global index.
+        If None, the batch size is picked automatically: one single batch for the
+        smaller datasets and LARGE_DATA_BATCH_SIZE for the larger ones. An explicit
+        integer is always used as given.
+        NOTE: due to floating point arithmatic, the mean similarities can differ
+        between two batch sizes with around <1e-16. The edge support is unaffected.
     seed : int
-        Base random seed for bootstrap resampling.
+        Base random seed for bootstrap resampling. Replicate b uses seed + b, so the
+        same seed always gives the same network.
     return_history : bool
         Whether to return cumulative bootstrap history.
     track_bins : bool
@@ -66,6 +78,10 @@ def calculate_bootstrapping(
 
     if B > np.iinfo(np.uint16).max:
         raise ValueError(f"B={B} exceeds uint16 max ({np.iinfo(np.uint16).max}); reduce B or change the dtype of total_pair_counts / total_edge_support.")
+
+    # The batch size only changes the memory usage and not the result, so we can pick it here.
+    N_features = len(spectra_binned)  # nr of spectra/features
+    batch_size = _resolve_batch_size(batch_size, B, N_features)
 
     # NOTE: due to floating point arithmatic, the resulting values in the cosine similarity matrix might differ with the orignal function with around <1e-7.
     history = {}
@@ -173,6 +189,27 @@ def calculate_bootstrapping(
 
 
 
+def _resolve_batch_size(batch_size, B: int, n_features: int) -> int:
+    """Pick the batch size, using the automatic setting when none is given.
+
+    Parameters:
+    batch_size : int or None
+        Requested batch size. An explicit integer is returned as given.
+    B : int
+        Number of bootstrap replicates.
+    n_features : int
+        Number of spectra/features in the dataset.
+
+    Returns:
+    int:
+    The batch size to use. Automatically this is B (one single batch) for datasets
+    below AUTO_BATCH_FEATURE_THRESHOLD features, and LARGE_DATA_BATCH_SIZE above it.
+    """
+    if batch_size is None:
+        return B if n_features < AUTO_BATCH_FEATURE_THRESHOLD else LARGE_DATA_BATCH_SIZE
+    return batch_size
+
+
 def bootstrap_batch(                
     spectra_binned,
     global_bins,
@@ -195,7 +232,7 @@ def bootstrap_batch(
     similarity_metric: callable
         Similarity object used to calculate pairwise similarities.
     seed : int
-        Base random seed.
+        Base random seed. Replicate b is seeded with seed + b.
     k : int
         Number of nearest neighbors used for mutual-kNN support.
     B : list[int]
@@ -215,7 +252,6 @@ def bootstrap_batch(
     t_batch_start = time.perf_counter()
 
     dataset_size = len(spectra_binned)
-    random_generator = np.random.default_rng(seed)
 
     # Accumulate results across the bootstrap replicates in this batch.
     total_pair_similarities = np.zeros((dataset_size, dataset_size), dtype=float)  # matrix with the sum of all similarities of each pair combination
@@ -225,6 +261,10 @@ def bootstrap_batch(
     history = []
 
     for b in tqdm(B):
+
+        # Seed on the global bootstrap index, so each replicate gets its own resample.
+        # Seeding once per batch would make every batch repeat the first batch again.
+        random_generator = np.random.default_rng(seed + b)
 
         masked_spectra, sampled_bins = _mask_spectra(random_generator, global_bins, spectra_binned)
 

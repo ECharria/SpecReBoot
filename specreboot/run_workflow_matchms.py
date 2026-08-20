@@ -199,10 +199,12 @@ def build_parser(p: argparse.ArgumentParser):
     p.add_argument(
             "--batch-size",
             type=int,
-            default=10,
+            default=None,
             help=(
                 "Number of bootstrap iterations to run in each batch. "
-                "This is a trade-off between memory usage and parallelization efficiency."
+                "This only bounds peak memory usage and does not change the result. "
+                "Default (unset) picks it automatically: a single batch for datasets "
+                "with fewer than 50,000 features, and batches of 10 for larger ones."
             ),
     )
     p.add_argument(
