@@ -105,17 +105,10 @@ def calculate_bootstrapping(
     if verbose:
         print(f"Running {B} bootstraps in {len(batches)} batches (batch_size={batch_size}) with {n_jobs} workers", flush=True)
 
-    compute_start = time.perf_counter()
-
     args = [(spectra_binned, global_bins, similarity_metric, seed, k, b, return_history, track_bins, verbose) for b in batches]
 
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
         results = list(executor.map(lambda x: bootstrap_batch(*x), args))
-
-    compute_end = time.perf_counter()
-
-    if verbose:
-        print(f"Bootstrap batch execution finished in {compute_end - compute_start:.2f} seconds", flush=True)
 
     all_history = []
 
@@ -132,12 +125,6 @@ def calculate_bootstrapping(
 
     merge_end = time.perf_counter()
     total_end = time.perf_counter()
-
-    if verbose:
-        print(f"Merge finished in {merge_end - merge_start:.2f} seconds", flush=True)
-        print(f"Total bootstrapping completed in {total_end - total_start:.2f} seconds", flush=True)
-
-
      
     # Calculate the mean similarity only where a pair was observed.
     mean_similarities = np.divide(
