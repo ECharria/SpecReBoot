@@ -150,6 +150,15 @@ def build_parser(p: argparse.ArgumentParser):
             ),
     )
     p.add_argument(
+            "--spec2vec-allowed-missing-percentage",
+            type=float,
+            default=5.0,
+            help=(
+                "Maximum percentage of missing peaks allowed in spec2vec similarity calculation. "
+                "Prevents failed similarity calculations due to vocabulary gaps, particularly in specific cases involving self-trained models."
+            ),
+    )
+    p.add_argument(
             "--tolerance",
             type=float,
             default=0.01,
@@ -360,7 +369,7 @@ def run(args):
         similarity_objs["Spec2Vec"] = Spec2Vec(
             model=w2v,
             intensity_weighting_power=0.5,
-            allowed_missing_percentage=5.0,
+            allowed_missing_percentage=args.spec2vec_allowed_missing_percentage,
         )
 
     if "ms2deepscore" in sim_keys:

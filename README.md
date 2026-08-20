@@ -203,6 +203,7 @@ Example — multiple selected metrics:
 | `--batch-size` | `10` | Replicates per thread-pool batch |
 | `--sim-threshold` | `0.7` | Mean similarity threshold for cosine/modcosine/spec2vec graphs |
 | `--sim-threshold-ms2dp` | `0.8` | Mean similarity threshold for MS2DeepScore graphs |
+| `--spec2vec-allowed-missing-percentage` | `5.0` | Maximum percentage of missing peaks allowed in spec2vec similarity calculation |
 | `--support-threshold` | `0.5` | Minimum edge support for threshold graph |
 | `--max-component-size` | `100` | Maximum connected-component size |
 | `--max-links` | `None` | Maximum edges per node; each node keeps only its top-N neighbours by mean similarity. `None` disables the filter |
