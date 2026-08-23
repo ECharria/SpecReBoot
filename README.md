@@ -296,7 +296,7 @@ These outputs reproduce the RiPP case study discussed in the preprint and can be
 
 ## New - Query-focused library matching algorithm (Under development) 🚧
 
-In addition to the molecular networking, SpecReBoot now includes a library matching module for confidence-aware spectral matching. This module applies the same core idea of bootstrap resampling to spectral library matching, allowing candidate hits to be evaluated not only by their original score but also by quantifying their reproducibility under perturbation of the underlying fragment evidence.
+In addition to the molecular networking, SpecReBoot now includes a library matching module for confidence-aware spectral matching. The approach is described in [Charria Girón *et al.* (2026), *bioRxiv*](https://www.biorxiv.org/content/10.64898/2026.07.30.741704v1). This module applies the same core idea of bootstrap resampling to spectral library matching, allowing candidate hits to be evaluated not only by their original score but also by quantifying their reproducibility under perturbation of the underlying fragment evidence.
 
 ### Concept
 
@@ -419,6 +419,10 @@ The code in this package is licensed under the MIT License.
 If you use SpecReBoot in your work, please cite:
 
 Charria Girón, E., Torres Ortega, L. R., Mergola Greef, J., Marin Felix, Y., Caicedo Ortega, N. H., Surup, F., Medema, M. H., & van der Hooft, J. J. J. (2026). Bootstrap resampling of mass spectral pairs with SpecReBoot reveals hidden molecular relationships. *bioRxiv*. doi: [https://doi.org/10.64898/2026.02.03.703446](https://www.biorxiv.org/content/10.64898/2026.02.03.703446v1)
+
+If you use the **library matching module**, please also cite:
+
+Charria Girón, E., van IJcken, J., Della Vedova, L., Torres Ortega, L. R., & van der Hooft, J. J. J. (2026). Quantifying per-match reliability in library matching for untargeted metabolomics workflows. *bioRxiv*. doi: [https://doi.org/10.64898/2026.07.30.741704](https://www.biorxiv.org/content/10.64898/2026.07.30.741704v1)
 
 ### Contact
 Please open a GitHub Issue for bugs/feature requests.
