@@ -12,3 +12,6 @@ specreboot = "specreboot.cli:cli"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["specreboot*"]
+
+[tool.setuptools.package-data]
+"specreboot.configs" = ["*.yaml"]
