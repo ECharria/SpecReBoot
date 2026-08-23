@@ -73,8 +73,8 @@ SpecReBoot can run multiple similarity methods so you can compare results across
 
 Bootstrapping is a computationally expensive step, so SpecReBoot uses a **batched thread-pool** strategy via Python's `concurrent.futures.ThreadPoolExecutor`:
 
-1. The `B` bootstrap replicates are divided into batches of size `--batch-size` (default: 10).
-2. Each batch is submitted as an independent task to a pool of `--n-jobs` worker threads (default: 8).
+1. The `B` bootstrap replicates, for >50,000 spectra, these are divided in batches `--batch-size` (default: 10).
+2. If there are mutiple batches, each is submitted as an independent task to a pool of `--n-jobs` worker threads (default: 8).
 3. Within a batch, replicates run sequentially — similarity scoring via `matchms.calculate_scores` releases the GIL, so threads provide parallelism for heavy steps.
 4. In **fast mode** (default), each batch returns only aggregated pair-similarity sums and edge-support counts, minimising memory overhead during parallel execution.
 5. In **history mode** (`--return-history` or `--track-bins`), each batch returns per-replicate results which are merged and sorted after all threads complete.
@@ -166,7 +166,7 @@ specreboot matchms \
   --spec2vec-model "path_to_your_Spec2Vec_model.model" \
   --outdir "output_matchms" \
   --prefix "Reboot" \
-  --B 30 --k 5 --n-jobs 4 --batch-size 10 \
+  --B 30 --k 5 --n-jobs 4 \
   --sim-threshold 0.7 \
   --sim-threshold-ms2dp 0.8
 ```
@@ -182,7 +182,7 @@ specreboot matchms \
   --tolerance 0.02 \
   --outdir "/.../output_matchms" \
   --prefix "Reboot_modcos" \
-  --B 30 --k 5 --n-jobs 4 --batch-size 10 \
+  --B 30 --k 5 --n-jobs 4 \
   --sim-threshold 0.7
 ```
 
@@ -200,17 +200,20 @@ Example — multiple selected metrics:
 | `--B` | `100` | Number of bootstrap replicates |
 | `--k` | `5` | Top-k neighbours for mutual-kNN edge support |
 | `--n-jobs` | `8` | Number of parallel worker threads |
-| `--batch-size` | `10` | Replicates per thread-pool batch |
 | `--sim-threshold` | `0.7` | Mean similarity threshold for cosine/modcosine/spec2vec graphs |
 | `--sim-threshold-ms2dp` | `0.8` | Mean similarity threshold for MS2DeepScore graphs |
+| `--spec2vec-allowed-missing-percentage` | `5.0` | Maximum percentage of missing peaks allowed in spec2vec similarity calculation |
 | `--support-threshold` | `0.5` | Minimum edge support for threshold graph |
 | `--max-component-size` | `100` | Maximum connected-component size |
+| `--max-links` | `None` | Maximum edges per node; each node keeps only its top-N neighbours by mean similarity. `None` disables the filter |
+| `--link-method` | `mutual` | How to resolve the per-node degree cap: `mutual` keeps an edge only if both endpoints accept it; `single` keeps an edge if either endpoint accepts it |
 | `--tolerance` | `0.01` | Fragment m/z tolerance (Da) |
 | `--decimals` | `2` | Decimal places for m/z binning |
 | `--label-mode` | `feature` | Node label source: `feature`, `scan`, or `internal` |
 | `--return-history` | flag | Store cumulative bootstrap history (slower, more memory) |
 | `--track-bins` | flag | Store sampled/missing bins per replicate (slower) |
 | `--sim-rescue-min` | `1e-5` | Minimum similarity floor for rescued edges |
+| `--save-matrices` | `True` | Save mean similarity and edge support as CSV files. Use `--no-save-matrices` to skip (recommended for large datasets >20k spectra) |
 
 ---
 
@@ -234,13 +237,13 @@ specreboot gnps \
   --gnps-graphml "path_to_graphml.graphml" \
   --outdir "output_gnps" \
   --prefix "Reboot" \
-  --B 100 --k 5 --n-jobs 4 --batch-size 10 \
+  --B 100 --k 5 --n-jobs 4 \
   --similarity modcosine \
   --tolerance 0.02 \
   --candidate-node-attrs "shared name" \
   --sim-threshold 0.7 \
   --support-threshold 0.5 \
-  --sim-rescue-min 1e-5 \
+  --sim-rescue-min 1e-5
 ```
 
 #### Key gnps arguments
@@ -253,13 +256,15 @@ specreboot gnps \
 | `--B` | `100` | Number of bootstrap replicates |
 | `--k` | `5` | Top-k neighbours for mutual-kNN |
 | `--n-jobs` | `8` | Number of parallel worker threads |
-| `--batch-size` | `10` | Replicates per thread-pool batch |
 | `--sim-threshold` | `0.7` | Similarity threshold for core edges and threshold graph |
 | `--support-threshold` | `0.5` | Minimum edge support |
 | `--sim-rescue-min` | `1e-5` | Minimum similarity floor for rescued edges |
 | `--candidate-node-attrs` | `shared name` | GNPS node attribute(s) used to map bootstrap IDs to GNPS nodes |
 | `--label-mode` | `feature` | Node label source: `feature`, `scan`, or `internal` |
 | `--max-component-size` | `100` | Maximum connected-component size |
+| `--max-links` | `None` | Maximum edges per node; each node keeps only its top-N neighbours by mean similarity. `None` disables the filter |
+| `--link-method` | `mutual` | How to resolve the per-node degree cap: `mutual` keeps an edge only if both endpoints accept it; `single` keeps an edge if either endpoint accepts it |
+| `--save-matrices` | `True` | Save mean similarity and edge support as CSV files. Use `--no-save-matrices` to skip (recommended for large datasets >20k spectra) |
 
 ---
 
@@ -276,7 +281,7 @@ specreboot matchms \
   --spec2vec-model "/path/to/spec2vec_model.model" \
   --outdir "/path/to/results_folder" \
   --prefix "Reboot" \
-  --B 30 --k 5 --n-jobs 4 --batch-size 10 \
+  --B 30 --k 5 --n-jobs 4 \
   --sim-threshold 0.7 --sim-threshold-ms2dp 0.8 \
   --return-history \
   --track-bins

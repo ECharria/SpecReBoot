@@ -29,6 +29,62 @@ def _validate_matrix_pair(df_a: pd.DataFrame, df_b: pd.DataFrame) -> None:
 
 
 # ----------------------------------------------------------------------
+# Per-node degree filtering (max_links)
+# ----------------------------------------------------------------------
+
+def _apply_max_links(
+    edge_mask: np.ndarray,
+    u_nodes: np.ndarray,
+    v_nodes: np.ndarray,
+    similarity_array: np.ndarray,
+    max_links: int,
+    link_method: str = "mutual",
+) -> np.ndarray:
+    """Limit each node to its top-max_links edges by similarity.
+
+    Parameters:
+    edge_mask : np.ndarray  Candidate edges that passed threshold filters (E,).
+    u_nodes, v_nodes : np.ndarray  Upper-triangle row/col indices (E,).
+    similarity_array : np.ndarray  Similarity per edge (E,).
+    max_links : int  Max edges per node.
+    link_method : str
+        "single" — keep an edge if either endpoint accepts it.
+        "mutual" — keep an edge only if both endpoints accept it.
+
+    Returns:
+    np.ndarray: Boolean mask (E,) of edges surviving the degree cap.
+    """
+    if link_method not in ("single", "mutual"):
+        raise ValueError("link_method must be 'single' or 'mutual'")
+
+    nr_of_nodes = max(int(np.max(u_nodes)), int(np.max(v_nodes))) + 1
+    node_edges: list[list[tuple[float, int]]] = [[] for _ in range(nr_of_nodes)]
+
+    for idx in np.where(edge_mask)[0]:
+        u, v = int(u_nodes[idx]), int(v_nodes[idx])
+        node_edges[u].append((float(similarity_array[idx]), idx))
+        node_edges[v].append((float(similarity_array[idx]), idx))
+
+    top_sets: list[set[int]] = []
+    for edges in node_edges:
+        if len(edges) <= max_links:
+            top_sets.append({idx for _, idx in edges})
+        else:
+            edges.sort(key=lambda x: x[0], reverse=True)
+            top_sets.append({idx for _, idx in edges[:max_links]})
+
+    result = np.zeros(len(edge_mask), dtype=bool)
+    for idx in np.where(edge_mask)[0]:
+        u, v = int(u_nodes[idx]), int(v_nodes[idx])
+        if link_method == "single":
+            result[idx] = (idx in top_sets[u]) or (idx in top_sets[v])
+        else:
+            result[idx] = (idx in top_sets[u]) and (idx in top_sets[v])
+
+    return result
+
+
+# ----------------------------------------------------------------------
 # Component filtering
 # ----------------------------------------------------------------------
 
@@ -159,6 +215,8 @@ def build_base_graph(
     df_mean_sim: pd.DataFrame,
     df_support: pd.DataFrame,
     sim_threshold: float = 0.7,
+    max_links: int | None = None,
+    link_method: str = "mutual",
     max_component_size: int | None = None,
     cosine_delta: float = 0.02,
     output_file: str = "network_similarity.graphml",
@@ -208,6 +266,9 @@ def build_base_graph(
 
     mask = sim_vals >= sim_threshold
 
+    if max_links is not None:
+        mask &= _apply_max_links(mask, i_idx, j_idx, sim_vals, max_links, link_method)
+
     if max_component_size is not None:
         mask &= _filter_components(mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta, retire_groups=True)
 
@@ -227,6 +288,8 @@ def build_thresh_graph(
     df_support: pd.DataFrame,
     sim_threshold: float = 0.7,
     support_threshold: float = 0.3,
+    max_links: int | None = None,
+    link_method: str = "mutual",
     max_component_size: int | None = None,
     cosine_delta: float = 0.02,
     output_file: str = "network_supported.graphml",
@@ -277,6 +340,9 @@ def build_thresh_graph(
 
     mask = (sim_vals >= sim_threshold) & (sup_vals >= support_threshold)
 
+    if max_links is not None:
+        mask &= _apply_max_links(mask, i_idx, j_idx, sim_vals, max_links, link_method)
+
     if max_component_size is not None:
         mask &= _filter_components(mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta, retire_groups=True)
 
@@ -298,6 +364,8 @@ def build_core_rescue_graph(
     support_core: float = 0.3,
     sim_rescue_min: float = 0.2,
     support_rescue: float = 0.4,
+    max_links: int | None = None,
+    link_method: str = "mutual",
     max_component_size: int | None = None,
     cosine_delta: float = 0.02,
     output_file: str = "network_multiclass.graphml",
@@ -357,6 +425,9 @@ def build_core_rescue_graph(
     core_mask   = (sim_vals >= sim_core)      & (sup_vals >= support_core)
     rescue_mask = (sim_vals >= sim_rescue_min) & (sim_vals < sim_core) & (sup_vals >= support_rescue)
     either_mask = core_mask | rescue_mask
+
+    if max_links is not None:
+        either_mask &= _apply_max_links(either_mask, i_idx, j_idx, sim_vals, max_links, link_method)
 
     if max_component_size is not None:
         either_mask &= _filter_components(either_mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta, retire_groups=True)

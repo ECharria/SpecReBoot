@@ -1,6 +1,65 @@
 import networkx as nx
+import numpy as np
 import pandas as pd
-from specreboot.networking.networking import _filter_components
+from specreboot.networking.networking import _filter_components, _apply_max_links
+
+
+def _filter_graph_by_component_size(
+    G: nx.Graph,
+    max_component_size: int,
+    cosine_delta: float,
+) -> None:
+    """NetworkX adapter for _filter_components.
+
+    Translates the graph's edges into the numpy arrays expected by
+    _filter_components, runs the greedy union-find size filtering, then
+    removes any rejected edge directly from G.
+
+    Parameters
+    ----------
+    G : nx.Graph
+        The graph to filter. Edges are removed in-place.
+    max_component_size : int
+        Maximum allowed number of nodes in any connected component.
+    cosine_delta : float
+        Passed through to _filter_components (reserved, currently unused).
+
+    Returns
+    -------
+    None
+        G is modified in-place; edges that would cause a component to exceed
+        max_component_size are removed. No new graph is returned.
+    """
+    edges = list(G.edges(data=True))
+    if not edges:
+        return
+    node_idx = {n: i for i, n in enumerate(G.nodes())}
+    u_nodes = np.array([node_idx[u] for u, _, _ in edges])
+    v_nodes = np.array([node_idx[v] for _, v, _ in edges])
+    sim_array = np.array([d.get("weight", 0.0) for _, _, d in edges])
+    edge_mask = np.ones(len(edges), dtype=bool)
+    accepted = _filter_components(
+        edge_mask, u_nodes, v_nodes, sim_array, max_component_size, cosine_delta, retire_groups=True
+    )
+    for (u, v, _), keep in zip(edges, accepted):
+        if not keep:
+            G.remove_edge(u, v)
+
+def _filter_graph_by_max_links(G: nx.Graph, max_links: int, link_method: str = "mutual") -> None:
+    """NetworkX adapter for _apply_max_links. Removes edges in-place."""
+    edges = list(G.edges(data=True))
+    if not edges:
+        return
+    node_idx = {n: i for i, n in enumerate(G.nodes())}
+    u_nodes = np.array([node_idx[u] for u, _, _ in edges])
+    v_nodes = np.array([node_idx[v] for _, v, _ in edges])
+    sim_array = np.array([d.get("weight", 0.0) for _, _, d in edges])
+    edge_mask = np.ones(len(edges), dtype=bool)
+    accepted = _apply_max_links(edge_mask, u_nodes, v_nodes, sim_array, max_links, link_method)
+    for (u, v, _), keep in zip(edges, accepted):
+        if not keep:
+            G.remove_edge(u, v)
+
 
 def _make_node_only_copy(G_gnps: nx.Graph) -> nx.Graph:
     """
@@ -57,6 +116,8 @@ def add_threshold_edges_to_gnps_graph(
     id_map: dict[str, str],
     sim_threshold: float = 0.7,
     support_threshold: float = 0.3,
+    max_links: int | None = None,
+    link_method: str = "mutual",
     max_component_size: int | None = None,
     cosine_delta: float = 0.02,
     output_file: str = "gnps_plus_threshold.graphml",
@@ -143,8 +204,11 @@ def add_threshold_edges_to_gnps_graph(
                     weight=sim,
                 )
 
+    if max_links is not None:
+        _filter_graph_by_max_links(G, max_links, link_method)
+
     if max_component_size is not None:
-        _filter_components(G, max_component_size, cosine_delta)
+        _filter_graph_by_component_size(G, max_component_size, cosine_delta)
 
     nx.write_graphml(G, output_file)
     return G
@@ -158,6 +222,8 @@ def add_rescued_edges_to_gnps_graph(
     support_core: float = 0.3,
     sim_rescue_min: float = 0.2,
     support_rescue: float = 0.4,
+    max_links: int | None = None,
+    link_method: str = "mutual",
     max_component_size: int | None = None,
     cosine_delta: float = 0.02,
     output_file: str = "gnps_plus_rescued.graphml",
@@ -259,9 +325,12 @@ def add_rescued_edges_to_gnps_graph(
                     origin="bootstrap",
                     weight=sim,
                 )
-    
+
+    if max_links is not None:
+        _filter_graph_by_max_links(G, max_links, link_method)
+
     if max_component_size is not None:
-        _filter_components(G, max_component_size, cosine_delta)
+        _filter_graph_by_component_size(G, max_component_size, cosine_delta)
 
     nx.write_graphml(G, output_file)
     return G

@@ -150,6 +150,15 @@ def build_parser(p: argparse.ArgumentParser):
             ),
     )
     p.add_argument(
+            "--spec2vec-allowed-missing-percentage",
+            type=float,
+            default=5.0,
+            help=(
+                "Maximum percentage of missing peaks allowed in spec2vec similarity calculation. "
+                "Prevents failed similarity calculations due to vocabulary gaps, particularly in specific cases involving self-trained models."
+            ),
+    )
+    p.add_argument(
             "--tolerance",
             type=float,
             default=0.01,
@@ -177,12 +186,34 @@ def build_parser(p: argparse.ArgumentParser):
             ),
     )
     p.add_argument(
+            "--max-links",
+            type=int,
+            default=None,
+            help=(
+                "Maximum number of edges per node. "
+                "Each node keeps only its top-max-links neighbours by similarity. "
+                "None (default) disables the filter."
+            ),
+    )
+    p.add_argument(
+            "--link-method",
+            default="mutual",
+            choices=["single", "mutual"],
+            help=(
+                "How to resolve the per-node degree cap when two nodes disagree.\n"
+                "  mutual (default): keep an edge only if both endpoints accept it.\n"
+                "  single: keep an edge if either endpoint accepts it."
+            ),
+    )
+    p.add_argument(
             "--batch-size",
             type=int,
-            default=10,
+            default=None,
             help=(
                 "Number of bootstrap iterations to run in each batch. "
-                "This is a trade-off between memory usage and parallelization efficiency."
+                "This only bounds peak memory usage and does not change the result. "
+                "Default (unset) picks it automatically: a single batch for datasets "
+                "with fewer than 50,000 features, and batches of 10 for larger ones."
             ),
     )
     p.add_argument(
@@ -254,12 +285,7 @@ def calculate_similarities(binned_spectra, bins, model_name: str, similarity, ar
         label_mode=args.label_mode,
     )
 
-    if len(result) == 3:
-        df_mean_sim, df_edge_sup, history = result
-    else:
-        df_mean_sim, df_edge_sup = result
-        history = None
-
+    df_mean_sim, df_edge_sup, history = result
     if args.save_matrices:
         df_mean_sim.to_csv(outdir / f"{args.prefix}_bootstrap_mean_similarity_{model_name}.csv")
         df_edge_sup.to_csv(outdir / f"{args.prefix}_bootstrap_edge_support_{model_name}.csv")
@@ -272,6 +298,8 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
     build_base_graph(
         df_mean_sim, df_edge_sup,
         sim_threshold=sim_threshold,
+        max_links=args.max_links,
+        link_method=args.link_method,
         max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_base_{similarity_score}.graphml"),
     )
@@ -279,8 +307,10 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
     build_thresh_graph(
         df_mean_sim, df_edge_sup,
         sim_threshold=sim_threshold,
-        max_component_size=args.max_component_size,
         support_threshold=args.support_threshold,
+        max_links=args.max_links,
+        link_method=args.link_method,
+        max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_threshold_{similarity_score}.graphml"),
     )
 
@@ -290,6 +320,8 @@ def networking_score(df_mean_sim, df_edge_sup, similarity_score: str, sim_thresh
         support_core=args.support_threshold,
         sim_rescue_min=args.sim_rescue_min,
         support_rescue=args.support_threshold,
+        max_links=args.max_links,
+        link_method=args.link_method,
         max_component_size=args.max_component_size,
         output_file=str(outdir / f"{args.prefix}_bootstrap_rescued_{similarity_score}.graphml"),
     )
@@ -337,7 +369,7 @@ def run(args):
         similarity_objs["Spec2Vec"] = Spec2Vec(
             model=w2v,
             intensity_weighting_power=0.5,
-            allowed_missing_percentage=5.0,
+            allowed_missing_percentage=args.spec2vec_allowed_missing_percentage,
         )
 
     if "ms2deepscore" in sim_keys:
