@@ -361,6 +361,55 @@ result = confidence_aware_match(
 print(result.candidate_stats.head())
 ```
 
+### Command-line usage
+
+The module can also be run from the command line, which processes every spectrum
+in a query MGF against a library MGF and writes the per-candidate metrics to CSV:
+
+```bash
+python specreboot/run_library_matching.py \
+    --library library.mgf \
+    --query queries.mgf \
+    --similarity-type modcos \
+    --B 100 \
+    --top-n 100 \
+    --outdir results/
+```
+
+Defaults are read from `specreboot/configs/library_matching.yaml`; any argument
+given on the command line overrides the config file. Point `--config-file` at
+your own YAML to keep per-project settings.
+
+#### Key library matching arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `--config-file` | `configs/library_matching.yaml` | YAML file supplying defaults for every argument below |
+| `--library` | *(required)* | MGF file with the library spectra |
+| `--query` | *(required)* | MGF file with the query spectra to be matched |
+| `--library-cleaned` / `--query-cleaned` | `None` | Pre-cleaned MGF files, to skip re-cleaning on a rerun |
+| `--similarity-type` | `cos` | Metric: `cos`, `modcos`, `ms2ds`, or `spec2vec` (aliases accepted) |
+| `--B` | `100` | Number of bootstrap replicates |
+| `--top-n` | `100` | Number of candidates carried into the bootstrap phase |
+| `--score-threshold` | `0.7` | Minimum bootstrap score counted towards `match_support` (see note below) |
+| `--precursor-tolerance` | `0.02` | Da window for precursor *m/z* filtering |
+| `--analog-search` | `True` | Fill up to top-N with analogs when exact precursor matches are too few; disable with `--no-analog-search` |
+| `--cosine-tolerance` | `0.01` | Flash tolerance for cosine and modified cosine |
+| `--binning-decimals` | `2` | Binning precision used when masking peaks |
+| `--ms2deepscore-model-path` | `None` | Model path, required only for `ms2ds` |
+| `--spec2vec-model-path` | `None` | Model path, required only for `spec2vec` |
+| `--metadata-csv` | `None` | Optional MZmine metadata CSV supplying adduct information |
+| `--outdir` | `.` | Output directory for the result CSVs |
+
+> **Note on `--score-threshold`.** `match_support` counts the fraction of
+> replicates scoring above this threshold, so the default of `0.7` is only
+> meaningful on the cosine-like scales it was chosen for. Scores from
+> `spec2vec` in particular occupy a lower range, where a fixed `0.7` can drive
+> `match_support` to zero even for tightly reproducible hits. Set it per metric,
+> and read `score_mean ± score_std` alongside `match_support` rather than
+> relying on the support value alone.
+
+
 ## Attribution
 ### License
 
