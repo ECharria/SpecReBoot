@@ -7,9 +7,12 @@ import yaml
 import logging
 
 from pathlib import Path
-from argparse import Namespace, ArgumentParser
+from argparse import Namespace, ArgumentParser, BooleanOptionalAction
 from tqdm import tqdm
 
+
+# default config lives next to this script, so the CLI works from any working directory
+DEFAULT_CONFIG_FILE = Path(__file__).resolve().parent / "configs" / "library_matching.yaml"
 
 COSINE_ALIASES          = ["cos", "cosine"]
 MODIFIED_COSINE_ALIASES = ["modcos", "modified_cosine", "modified cosine"]
@@ -21,13 +24,13 @@ ALL_ALIASES = COSINE_ALIASES + MODIFIED_COSINE_ALIASES + SPEC2VEC_ALIASES + MS2D
 
 def build_parser() -> ArgumentParser:
     parser = ArgumentParser()
-    parser.add_argument("--config-file",                type=Path,  help="file location of default arguments, must be a .yaml file", default="configs/library_matching.yaml")
+    parser.add_argument("--config-file",                type=Path,  help="file location of default arguments, must be a .yaml file", default=DEFAULT_CONFIG_FILE)
     parser.add_argument("--library",                    type=Path,  help="mgf file with all library spectra")
     parser.add_argument("--query",                      type=Path,  help="mgf file with all query spectra that are checked for mathces in the library")
     parser.add_argument("--library-cleaned",            type=Path,  help="pre-cleaned mgf file with library spectra")
     parser.add_argument("--query-cleaned",              type=Path,  help="pre-cleaned mgf file with query spectra")
     parser.add_argument("--precursor-tolerance",        type=float, help="Da window for precursor m/z filtering")
-    parser.add_argument("--analog-search",              action="store_true", help="Enable analog fill-up when exact matches are below top-N")
+    parser.add_argument("--analog-search",              action=BooleanOptionalAction, default=None, help="enable/disable (--no-analog-search) analog fill-up when exact matches are below top-N; falls back to the config file when unset")
     parser.add_argument("--top-n",                      type=int,   help="number of candidates to include in bootstrap phase")
     parser.add_argument("--B",                          type=int,   help="number of bootstrap replicates")
     parser.add_argument("--similarity-type",            type=str,   help="type of similarity metric used to find matches in the library", choices=ALL_ALIASES)
