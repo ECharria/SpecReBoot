@@ -294,6 +294,122 @@ If the run completes successfully, results will include:
 
 These outputs reproduce the RiPP case study discussed in the preprint and can be used as a reference for adapting SpecReBoot to your own datasets!
 
+## New - Query-focused library matching algorithm (Under development) 🚧
+
+In addition to the molecular networking, SpecReBoot now includes a library matching module for confidence-aware spectral matching. The approach is described in [Charria Girón *et al.* (2026), *bioRxiv*](https://www.biorxiv.org/content/10.64898/2026.07.30.741704v1). This module applies the same core idea of bootstrap resampling to spectral library matching, allowing candidate hits to be evaluated not only by their original score but also by quantifying their reproducibility under perturbation of the underlying fragment evidence.
+
+### Concept
+
+For a given query spectrum, the workflow first performs a standard library search and retains the top-N candidate library spectra. It then constructs a global bin space from the query spectrum fragment bins only. In each bootstrap replicate, bins are resampled with replacement from this query-derived bin space, and the sampled bins define a shared mask that is applied to both the query and each candidate spectrum before rescoring. This yields a distribution of bootstrap similarity scores for every candidate in the top-N subset.
+
+The final output summarizes each candidate by both score-based and confidence-aware metrics.
+
+### Main steps
+
+1. Score the query spectrum against the full library.
+2. Retain the top-N candidate library spectra.
+3. Build the bootstrap bin space from the query spectrum only.
+4. Bin the query and candidate spectra.
+5. Run B bootstrap replicates by resampling query-derived bins.
+6. Recalculate query–candidate similarity in each replicate.
+7. Summarize bootstrap-derived support and rank stability metrics.
+
+### Reported metrics
+
+For each candidate, the module reports:
+
+- `original_score`: similarity score from the original query spectrum
+- `original_rank`: rank in the original top-N candidate list
+- `match_support`: fraction of bootstrap replicates with score above the support threshold
+- `score_mean`: mean bootstrap similarity score
+- `score_std`: standard deviation of bootstrap similarity scores
+- `top1_stability`: fraction of replicates in which the candidate ranks first
+- `top3_stability`: fraction of replicates in which the candidate ranks in the top 3
+- `top5_stability`: fraction of replicates in which the candidate ranks in the top 5
+- `mean_rank`: mean rank across bootstrap replicates
+
+These metrics allow candidates to be interpreted as reliable, ambiguous or fragile matches rather than relying on score alone!
+
+### Main functions
+
+The library matching workflow is implemented in:
+
+- `specreboot/library/library_matching.py`
+
+The most important user-facing functions are:
+
+- `confidence_aware_match()` for one query spectrum
+- `save_results()` for exporting one query result
+- `collect_results()` for aggregating results across many queries
+
+### Example usage
+
+```python
+from matchms.similarity import ModifiedCosine
+from specreboot.library.library_matching import confidence_aware_match
+
+result = confidence_aware_match(
+    query_spectrum=query_spectrum,
+    library_spectra=library_spectra,
+    similarity_metric=ModifiedCosine(),
+    B=50,
+    top_n=50,
+    score_threshold=0.7,
+    decimals=2,
+    seed=42,
+)
+print(result.candidate_stats.head())
+```
+
+### Command-line usage
+
+The module can also be run from the command line, which processes every spectrum
+in a query MGF against a library MGF and writes the per-candidate metrics to CSV:
+
+```bash
+python specreboot/run_library_matching.py \
+    --library library.mgf \
+    --query queries.mgf \
+    --similarity-type modcos \
+    --B 100 \
+    --top-n 100 \
+    --outdir results/
+```
+
+Defaults are read from `specreboot/configs/library_matching.yaml`; any argument
+given on the command line overrides the config file. Point `--config-file` at
+your own YAML to keep per-project settings.
+
+#### Key library matching arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `--config-file` | `configs/library_matching.yaml` | YAML file supplying defaults for every argument below |
+| `--library` | *(required)* | MGF file with the library spectra |
+| `--query` | *(required)* | MGF file with the query spectra to be matched |
+| `--library-cleaned` / `--query-cleaned` | `None` | Pre-cleaned MGF files, to skip re-cleaning on a rerun |
+| `--similarity-type` | `cos` | Metric: `cos`, `modcos`, `ms2ds`, or `spec2vec` (aliases accepted) |
+| `--B` | `100` | Number of bootstrap replicates |
+| `--top-n` | `100` | Number of candidates carried into the bootstrap phase |
+| `--score-threshold` | `0.7` | Minimum bootstrap score counted towards `match_support` (see note below) |
+| `--precursor-tolerance` | `0.02` | Da window for precursor *m/z* filtering |
+| `--analog-search` | `True` | Fill up to top-N with analogs when exact precursor matches are too few; disable with `--no-analog-search` |
+| `--cosine-tolerance` | `0.01` | Flash tolerance for cosine and modified cosine |
+| `--binning-decimals` | `2` | Binning precision used when masking peaks |
+| `--ms2deepscore-model-path` | `None` | Model path, required only for `ms2ds` |
+| `--spec2vec-model-path` | `None` | Model path, required only for `spec2vec` |
+| `--metadata-csv` | `None` | Optional MZmine metadata CSV supplying adduct information |
+| `--outdir` | `.` | Output directory for the result CSVs |
+
+> **Note on `--score-threshold`.** `match_support` counts the fraction of
+> replicates scoring above this threshold, so the default of `0.7` is only
+> meaningful on the cosine-like scales it was chosen for. Scores from
+> `spec2vec` in particular occupy a lower range, where a fixed `0.7` can drive
+> `match_support` to zero even for tightly reproducible hits. Set it per metric,
+> and read `score_mean ± score_std` alongside `match_support` rather than
+> relying on the support value alone.
+
+
 ## Attribution
 ### License
 
@@ -303,6 +419,10 @@ The code in this package is licensed under the MIT License.
 If you use SpecReBoot in your work, please cite:
 
 Charria Girón, E., Torres Ortega, L. R., Mergola Greef, J., Marin Felix, Y., Caicedo Ortega, N. H., Surup, F., Medema, M. H., & van der Hooft, J. J. J. (2026). Bootstrap resampling of mass spectral pairs with SpecReBoot reveals hidden molecular relationships. *bioRxiv*. doi: [https://doi.org/10.64898/2026.02.03.703446](https://www.biorxiv.org/content/10.64898/2026.02.03.703446v1)
+
+If you use the **library matching module**, please also cite:
+
+Charria Girón, E., van IJcken, J., Della Vedova, L., Torres Ortega, L. R., & van der Hooft, J. J. J. (2026). Quantifying per-match reliability in library matching for untargeted metabolomics workflows. *bioRxiv*. doi: [https://doi.org/10.64898/2026.07.30.741704](https://www.biorxiv.org/content/10.64898/2026.07.30.741704v1)
 
 ### Contact
 Please open a GitHub Issue for bugs/feature requests.
