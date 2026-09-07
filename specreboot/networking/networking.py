@@ -207,6 +207,64 @@ def _assign_cluster_ids(graph: nx.Graph) -> None:
             graph.nodes[node]["component"] = cid
 
 
+def _filter_components_iterative(
+    edge_mask: np.ndarray,
+    u_nodes: np.ndarray,
+    v_nodes: np.ndarray,
+    similarity_array: np.ndarray,
+    max_component_size: int,
+    cosine_delta: float = 0.02,
+) -> np.ndarray:
+    """Iteratively prune weakest edges until all components fit under max_component_size.
+
+    Mimics the GNPS-style pruning from SimilarityNetworkMod: build the full
+    graph first, then repeatedly find oversized components and remove edges
+    within cosine_delta of the component's minimum weight.
+
+    Parameters match _filter_components for easy swapping.
+    """
+    # Build a temporary graph from all candidate edges
+    candidate_indices = np.where(edge_mask)[0]
+    G = nx.Graph()
+
+    all_nodes = set(u_nodes[candidate_indices]) | set(v_nodes[candidate_indices])
+    G.add_nodes_from(all_nodes)
+
+    for idx in candidate_indices:
+        G.add_edge(int(u_nodes[idx]), int(v_nodes[idx]), weight=float(similarity_array[idx]), _idx=int(idx))
+
+    # Iteratively prune oversized components
+    changed = True
+    while changed:
+        changed = False
+        for component in list(nx.connected_components(G)):
+            if len(component) <= max_component_size:
+                continue
+            # Get edges in this component
+            comp_edges = []
+            for u, v, data in G.edges(component, data=True):
+                if v in component:
+                    comp_edges.append((u, v, data))
+            if not comp_edges:
+                continue
+
+            min_weight = min(d["weight"] for _, _, d in comp_edges)
+            threshold = min_weight + cosine_delta
+
+            for u, v, data in comp_edges:
+                if data["weight"] < threshold:
+                    G.remove_edge(u, v)
+                    changed = True
+
+    # Convert surviving edges back to a boolean mask
+    surviving = {d["_idx"] for _, _, d in G.edges(data=True)}
+    result = np.zeros(len(edge_mask), dtype=bool)
+    for idx in surviving:
+        result[idx] = True
+
+    return result
+
+
 # ----------------------------------------------------------------------
 # Graph builders
 # ----------------------------------------------------------------------
@@ -220,6 +278,7 @@ def build_base_graph(
     max_component_size: int | None = None,
     cosine_delta: float = 0.02,
     output_file: str = "network_similarity.graphml",
+    pruning_method: str = "greedy",
 ) -> nx.Graph:
     """Build a graph where edges exist if mean similarity meets a threshold.
 
@@ -269,8 +328,12 @@ def build_base_graph(
     if max_links is not None:
         mask &= _apply_max_links(mask, i_idx, j_idx, sim_vals, max_links, link_method)
 
+        # Inside build_base_graph, replace the component filter block with:
     if max_component_size is not None:
-        mask &= _filter_components(mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta, retire_groups=True)
+        if pruning_method == "greedy":
+            mask &= _filter_components(mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta, retire_groups=True)
+        elif pruning_method == "iterative":
+            mask &= _filter_components_iterative(mask, i_idx, j_idx, sim_vals, max_component_size, cosine_delta)
 
     edges = [
         (scan_ids[i], scan_ids[j], {"weight": float(s), "bootstrap_support": float(p)})
