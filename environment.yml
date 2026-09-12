@@ -8,3 +8,4 @@ dependencies:
   - ipykernel
   - spec2vec
   - ms2deepscore = 2.6
+  - pytest

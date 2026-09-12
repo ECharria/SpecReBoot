@@ -2,3 +2,4 @@ matchms>=0.24.0
 ipykernel
 spec2vec
 ms2deepscore>=2.0.0
+pytest
