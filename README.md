@@ -1,11 +1,29 @@
 ![header](./assets/Logo_white.jpg)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18466798.svg)](https://doi.org/10.5281/zenodo.18466798)
 [![Repro Pack DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18466976.svg)](https://doi.org/10.5281/zenodo.18466976)
+[![Web app](https://img.shields.io/badge/web%20app-specreboot.bioinformatics.nl-7d349a)](https://specreboot.bioinformatics.nl)
 
 *Statistical bootstrapping for spectral similarity and molecular networking*
 
 > **Status:** in active development 🚧  
 > Feedback, ideas, issues, and PRs are very welcome!
+
+---
+
+## Try it in your browser 🌐
+
+**[specreboot.bioinformatics.nl](https://specreboot.bioinformatics.nl)** runs
+SpecReBoot without installing anything.
+
+- **Library matching** — search a spectrum against GNPS-MSn, MSn-COCONUT,
+  GNPS-NP, MassBank or a drugs-of-abuse library, and see the match support for
+  every candidate alongside its score.
+- **Molecular networking** — upload an MGF and get the base, threshold and
+  rescued networks as GraphML, ready for Cytoscape.
+
+There is a one-click example on each tab if you just want to see what it does.
+The web version caps job size so the server stays responsive; for larger
+datasets or the full set of options, use the command line below.
 
 ---
 
