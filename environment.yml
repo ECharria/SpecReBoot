@@ -2,10 +2,15 @@ name: specreboot
 channels:
   - conda-forge
   - bioconda
+  - defaults
 dependencies:
-  - python=3.12
-  - matchms = 0.31.0
+  - python==3.12
+  - numpy<2.2
+  - matchms==0.31.0
   - ipykernel
   - spec2vec
-  - ms2deepscore = 2.6
   - pytest
+  - pip
+
+  - pip:
+     - ms2deepscore==2.11
