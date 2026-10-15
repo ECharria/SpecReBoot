@@ -144,8 +144,10 @@ def _filter_components(
     sim = similarity_array.copy()
     sim[edge_mask == 0] = 0  # zero out edges that did not pass the threshold
 
-    # Process edges from strongest to weakest.
-    indices = np.argsort(sim)[::-1]
+    # Process edges from strongest to weakest. When sim is equal, discriminate based on u and then v to make deterministic
+    u_nodes = np.minimum(u_nodes, v_nodes)
+    v_nodes = np.maximum(u_nodes, v_nodes)
+    indices = np.lexsort((v_nodes, u_nodes, -sim))
 
     mask = np.zeros_like(sim)
 
