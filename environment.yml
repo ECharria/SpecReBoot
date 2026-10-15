@@ -14,3 +14,4 @@ dependencies:
 
   - pip:
      - ms2deepscore==2.11
+     - onnxruntime 
