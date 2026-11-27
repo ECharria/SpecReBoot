@@ -145,8 +145,7 @@ def _filter_components(
     sim[edge_mask == 0] = 0  # zero out edges that did not pass the threshold
 
     # Process edges from strongest to weakest. When sim is equal, discriminate based on u and then v to make deterministic
-    u_nodes = np.minimum(u_nodes, v_nodes)
-    v_nodes = np.maximum(v_nodes, u_nodes)
+    u_nodes, v_nodes = np.minimum(u_nodes, v_nodes), np.maximum(u_nodes, v_nodes)
     indices = np.lexsort((v_nodes, u_nodes, -sim))
 
     mask = np.zeros_like(sim)
