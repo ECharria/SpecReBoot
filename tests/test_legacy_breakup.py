@@ -11,16 +11,20 @@ from specreboot.networking.networking import _filter_components
 EdgeData = namedtuple("EdgeData", ["u", "v", "w"])
 
 
-@pytest.fixture(scope="module")
-def random_edge_data():
+@pytest.fixture
+def random_edge_data(request):
     """Fixture to generate reproducible mock edge data."""
-    rng = random.Random(42)
+    rng = random.Random(getattr(request, "param", 42))
     edge_dict = {}
 
     for _ in range(100):
         u = rng.randint(0, 100)
         v = rng.randint(0, 100)
-        w = rng.randint(0, 10) / 10  # this simulates many edge cases
+        # Weights must stay > 0: in the real pipeline sim[edge_mask == 0] = 0
+        # marks an edge as "failed the threshold", and _filter_components drops
+        # those by design. The legacy implementation has no such concept, so a
+        # zero weight makes the two disagree for reasons unrelated to breakup.
+        w = rng.randint(1, 10) / 10
         key = tuple(sorted((u, v)))
         edge_dict[key] = w
 
@@ -129,7 +133,8 @@ def normalize_edges(edge_data: EdgeData) -> set:
     return result
 
 
-@pytest.mark.parametrize("max_component_size", [1, 3, 5])
+@pytest.mark.parametrize("random_edge_data", [42, 1, 7, 99, 2026], indirect=True)
+@pytest.mark.parametrize("max_component_size", [1, 3, 5, 10, 20, 50])
 def test_filter_components_matches_legacy(random_edge_data, max_component_size):
     """
     Test that the optimized `_filter_components` implementation outputs
